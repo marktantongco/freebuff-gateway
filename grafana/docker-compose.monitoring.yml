@@ -1,0 +1,86 @@
+version: "3.8"
+
+services:
+  # ─── Freebuff Gateway ───────────────────────────────────
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: freebuff-gateway
+    restart: unless-stopped
+    ports:
+      - "30080:30080"
+    environment:
+      - FREEBUFF_LISTEN_ADDR=:30080
+      - FREEBUFF_ADMIN_PASSWORD=${FREEBUFF_ADMIN_PASSWORD:-admin}
+    networks:
+      - monitoring
+
+  # ─── Prometheus ─────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: freebuff-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts:/etc/prometheus/alerts:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=1GB"
+      - "--web.enable-lifecycle"
+    networks:
+      - monitoring
+    depends_on:
+      - gateway
+
+  # ─── Grafana ────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: freebuff-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-freebuff}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/http-overview.json
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./dashboards:/var/lib/grafana/dashboards:ro
+      - ./provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+  # ─── Node Exporter (optional host metrics) ──────────────
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: freebuff-node-exporter
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - monitoring
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  monitoring:
+    driver: bridge

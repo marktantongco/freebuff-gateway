@@ -1,0 +1,211 @@
+{
+  "annotations": { "list": [] },
+  "description": "Freebuff Gateway - System Health & Resources",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Gateway Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }
+        }
+      },
+      "targets": [
+        { "expr": "up{job=\"freebuff-gateway\"}", "legendFormat": "Status", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 30, "lineWidth": 2 },
+          "unit": "bytes"
+        }
+      },
+      "targets": [
+        { "expr": "process_resident_memory_bytes{job=\"freebuff-gateway\"}", "legendFormat": "RSS Memory", "refId": "A" },
+        { "expr": "process_virtual_memory_bytes{job=\"freebuff-gateway\"}", "legendFormat": "Virtual Memory", "refId": "B" }
+      ]
+    },
+    {
+      "title": "Goroutines",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1000 }, { "color": "red", "value": 10000 }] }
+        }
+      },
+      "targets": [
+        { "expr": "go_goroutines{job=\"freebuff-gateway\"}", "legendFormat": "Goroutines", "refId": "A" }
+      ]
+    },
+    {
+      "title": "CPU Usage (process)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "percentunit",
+          "max": 1
+        }
+      },
+      "targets": [
+        { "expr": "rate(process_cpu_seconds_total{job=\"freebuff-gateway\"}[5m])", "legendFormat": "CPU Usage", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Open File Descriptors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "none"
+        }
+      },
+      "targets": [
+        { "expr": "process_open_fds{job=\"freebuff-gateway\"}", "legendFormat": "Open FDs", "refId": "A" },
+        { "expr": "process_max_fds{job=\"freebuff-gateway\"}", "legendFormat": "Max FDs", "refId": "B" }
+      ]
+    },
+    {
+      "title": "Go GC Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "s"
+        }
+      },
+      "targets": [
+        { "expr": "rate(go_gc_duration_seconds_sum{job=\"freebuff-gateway\"}[5m]) / rate(go_gc_duration_seconds_count{job=\"freebuff-gateway\"}[5m])", "legendFormat": "GC Duration Avg", "refId": "A" },
+        { "expr": "go_gc_duration_seconds{job=\"freebuff-gateway\",quantile=\"0.99\"}", "legendFormat": "GC p99", "refId": "B" }
+      ]
+    },
+    {
+      "title": "Heap Allocations",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 30, "lineWidth": 2 },
+          "unit": "bytes"
+        }
+      },
+      "targets": [
+        { "expr": "go_memstats_heap_inuse_bytes{job=\"freebuff-gateway\"}", "legendFormat": "Heap In Use", "refId": "A" },
+        { "expr": "go_memstats_heap_alloc_bytes{job=\"freebuff-gateway\"}", "legendFormat": "Heap Allocated", "refId": "B" },
+        { "expr": "go_memstats_heap_idle_bytes{job=\"freebuff-gateway\"}", "legendFormat": "Heap Idle", "refId": "C" }
+      ]
+    },
+    {
+      "title": "Network I/O",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "Bps"
+        }
+      },
+      "targets": [
+        { "expr": "rate(process_network_receive_bytes_total{job=\"freebuff-gateway\"}[5m])", "legendFormat": "Receive", "refId": "A" },
+        { "expr": "rate(process_network_transmit_bytes_total{job=\"freebuff-gateway\"}[5m])", "legendFormat": "Transmit", "refId": "B" }
+      ]
+    },
+    {
+      "title": "Go Threads",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 200 }] }
+        }
+      },
+      "targets": [
+        { "expr": "go_threads{job=\"freebuff-gateway\"}", "legendFormat": "OS Threads", "refId": "A" }
+      ]
+    },
+    {
+      "title": "GC Cycles",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "ops"
+        }
+      },
+      "targets": [
+        { "expr": "rate(go_gc_duration_seconds_count{job=\"freebuff-gateway\"}[5m]) * 60", "legendFormat": "GC Cycles/min", "refId": "A" }
+      ]
+    },
+    {
+      "title": "Uptime",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 24 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+          "unit": "s"
+        }
+      },
+      "targets": [
+        { "expr": "time() - process_start_time_seconds{job=\"freebuff-gateway\"}", "legendFormat": "Uptime", "refId": "A" }
+      ]
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["freebuff", "gateway", "system", "health"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "selected": true, "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Freebuff Gateway — System Health",
+  "uid": "freebuff-system-health",
+  "version": 1
+}
