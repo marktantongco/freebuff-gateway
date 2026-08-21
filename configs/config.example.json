@@ -1,58 +1,68 @@
 {
-  "listen_addr": ":8080",
-  "admin_password": "CHANGE_ME",
-  "db_path": "data/gateway.db",
+  "listen_addr": ":30080",
+  "admin_password": "CHANGE_ME_IN_PRODUCTION",
+  "db_path": "./data/gateway.db",
+
   "session": {
-    "wait_on_full": true,
-    "reap_interval_sec": 30,
+    "wait_on_full": false,
     "create_limits": {
-      "max_parallel_global": 50,
-      "max_parallel_per_key": 5,
-      "max_parallel_per_model": 10,
-      "max_parallel_per_group": 20
+      "max_parallel_global": 128,
+      "max_parallel_per_key": 32,
+      "max_parallel_per_model": 32,
+      "max_parallel_per_group": 96
     }
   },
+
   "transport": {
-    "timeout_sec": 60,
-    "body_preview_bytes": 8192,
-    "request_reuse": true
+    "timeout": "60s",
+    "request_reuse": false,
+    "body_preview_bytes": 8192
   },
+
   "proxy_pool": {
     "enabled": false,
-    "health_check_interval_sec": 60,
-    "health_check_timeout_sec": 10,
-    "health_check_concurrency": 5
+    "primary_url": "",
+    "health_check": {
+      "enabled": true,
+      "url": "http://ip-api.com/json/?fields=status,message,country,regionName,city,query",
+      "interval": "1m",
+      "timeout": "10s",
+      "concurrency": 5
+    }
   },
+
   "stealth": {
     "enabled": false,
     "tls_fingerprint": "chrome",
     "header_randomization": true,
     "proxy_rotation": true
   },
+
   "rate_limit": {
     "enabled": true,
     "requests_per_minute": 60
   },
+
+  "logging": {
+    "level": "info",
+    "file": "",
+    "redact_tokens": true
+  },
+
+  "health_check": {
+    "enabled": true,
+    "interval": "30s"
+  },
+
   "models": {
     "aliases": {
       "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
+      "deepseek-v4-flash": "deepseek/deepseek-v4-flash",
       "mimo-v2.5": "mimo/mimo-v2.5",
-      "kimi-k2.6": "moonshotai/kimi-k2.6"
+      "kimi-k2.6": "moonshotai/kimi-k2.6",
+      "minimax-m2.7": "minimax/minimax-m2.7",
+      "gemini-pro": "google/gemini-3.1-pro-preview"
     },
     "allowlist": ["*"]
-  },
-  "auth": {
-    "api_keys_file": "data/api_keys.json",
-    "multi_key_enabled": true
-  },
-  "logging": {
-    "level": "info",
-    "file": "logs/gateway.log",
-    "redact_tokens": true
-  },
-  "health_check": {
-    "enabled": true,
-    "interval_sec": 300,
-    "timeout_sec": 8
   }
 }
