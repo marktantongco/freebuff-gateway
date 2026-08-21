@@ -1,0 +1,58 @@
+{
+  "listen_addr": ":8080",
+  "admin_password": "CHANGE_ME",
+  "db_path": "data/gateway.db",
+  "session": {
+    "wait_on_full": true,
+    "reap_interval_sec": 30,
+    "create_limits": {
+      "max_parallel_global": 50,
+      "max_parallel_per_key": 5,
+      "max_parallel_per_model": 10,
+      "max_parallel_per_group": 20
+    }
+  },
+  "transport": {
+    "timeout_sec": 60,
+    "body_preview_bytes": 8192,
+    "request_reuse": true
+  },
+  "proxy_pool": {
+    "enabled": false,
+    "health_check_interval_sec": 60,
+    "health_check_timeout_sec": 10,
+    "health_check_concurrency": 5
+  },
+  "stealth": {
+    "enabled": false,
+    "tls_fingerprint": "chrome",
+    "header_randomization": true,
+    "proxy_rotation": true
+  },
+  "rate_limit": {
+    "enabled": true,
+    "requests_per_minute": 60
+  },
+  "models": {
+    "aliases": {
+      "deepseek-v4-pro": "deepseek/deepseek-v4-pro",
+      "mimo-v2.5": "mimo/mimo-v2.5",
+      "kimi-k2.6": "moonshotai/kimi-k2.6"
+    },
+    "allowlist": ["*"]
+  },
+  "auth": {
+    "api_keys_file": "data/api_keys.json",
+    "multi_key_enabled": true
+  },
+  "logging": {
+    "level": "info",
+    "file": "logs/gateway.log",
+    "redact_tokens": true
+  },
+  "health_check": {
+    "enabled": true,
+    "interval_sec": 300,
+    "timeout_sec": 8
+  }
+}
