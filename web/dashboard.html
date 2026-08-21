@@ -592,10 +592,91 @@
       }, 30000);
     }
 
+    // ─── WebSocket ──────────────────────────────────────────
+    let ws = null;
+    let wsReconnectTimer = null;
+
+    function connectWebSocket() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${location.host}/ws`;
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        console.log('[WS] Connected');
+        // Subscribe to all topics
+        ws.send(JSON.stringify({
+          type: 'subscribe',
+          data: ['health', 'alert', 'metrics', 'session']
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          handleWSMessage(msg);
+        } catch(e) {
+          console.error('[WS] Parse error:', e);
+        }
+      };
+
+      ws.onclose = () => {
+        console.log('[WS] Disconnected, reconnecting in 5s...');
+        wsReconnectTimer = setTimeout(connectWebSocket, 5000);
+      };
+
+      ws.onerror = (error) => {
+        console.error('[WS] Error:', error);
+      };
+    }
+
+    function handleWSMessage(msg) {
+      switch(msg.type) {
+        case 'health':
+          if (currentPage === 'overview') updateHealthFromWS(msg.data);
+          break;
+        case 'alert':
+          if (currentPage === 'alerts') loadAlerts();
+          showToast('New alert received', 'warning');
+          break;
+        case 'metrics':
+          if (currentPage === 'metrics') loadMetrics();
+          break;
+        case 'session':
+          if (currentPage === 'sessions') loadSessions();
+          break;
+        case 'ping':
+          // Respond with pong
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+          }
+          break;
+      }
+    }
+
+    function updateHealthFromWS(data) {
+      if (data && data.status) {
+        const dot = data.status === 'healthy' ? 'healthy' : 'unhealthy';
+        document.getElementById('stat-status').innerHTML = `<span class="health-dot ${dot}"></span>${data.status}`;
+        
+        if (data.uptime) {
+          const uptime = Math.floor(data.uptime / 1e9);
+          const h = Math.floor(uptime / 3600);
+          const m = Math.floor((uptime % 3600) / 60);
+          document.getElementById('stat-uptime').textContent = `${h}h ${m}m`;
+        }
+        
+        if (data.goroutines) {
+          document.getElementById('stat-goroutines').textContent = data.goroutines;
+        }
+      }
+    }
+
     // ─── Init ────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', () => {
       loadHealth();
       startAutoRefresh();
+      connectWebSocket();
     });
 
     // Close modal on overlay click

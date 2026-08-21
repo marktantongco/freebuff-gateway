@@ -33,6 +33,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/systemlogs"
 	"github.com/marktantongco/freebuff-gateway/internal/transport"
 	"github.com/marktantongco/freebuff-gateway/internal/usage"
+	"github.com/marktantongco/freebuff-gateway/internal/websocket"
 	"github.com/marktantongco/freebuff-gateway/web"
 )
 
@@ -213,12 +214,21 @@ func main() {
 	// Register alerting API routes (protected by admin auth)
 	alertHandler.RegisterRoutes(mux)
 
+	// ─── WebSocket ──────────────────────────────────────────────
+	wsHub := websocket.NewHub()
+	go wsHub.Run()
+	wsHandler := websocket.NewHandler(wsHub)
+	mux.HandleFunc("GET /ws", wsHandler.HandleWebSocket)
+	mux.HandleFunc("GET /ws/status", wsHandler.HandleWSStatus)
+
 	// Register observability endpoints
 	mux.Handle("GET /metrics", observability.NewPrometheusExporter().Handler())
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		resp := healthChecker.CheckHealth(r.Context())
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(resp)
+		// Broadcast health to WebSocket clients
+		wsHub.BroadcastToTopic(websocket.MsgTypeHealth, resp)
 	})
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -285,6 +295,7 @@ func main() {
 
 	<-ctx.Done()
 	log.Printf("gateway: shutting down")
+	wsHub.Stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
