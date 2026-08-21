@@ -151,6 +151,10 @@ func main() {
 		alertManager.AddNotifier(alerting.NewDiscordNotifier("discord", discordURL))
 		log.Printf("alerting: discord channel enabled")
 	}
+	if pdKey := os.Getenv("ALERT_PAGERDUTY_KEY"); pdKey != "" {
+		alertManager.AddNotifier(alerting.NewPagerDutyNotifier("pagerduty", pdKey))
+		log.Printf("alerting: pagerduty channel enabled")
+	}
 	if smtpAddr := os.Getenv("ALERT_EMAIL_SMTP"); smtpAddr != "" {
 		emailTo := strings.Split(os.Getenv("ALERT_EMAIL_TO"), ",")
 		emailCC := strings.Split(os.Getenv("ALERT_EMAIL_CC"), ",")
