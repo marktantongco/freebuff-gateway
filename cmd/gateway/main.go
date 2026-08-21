@@ -16,6 +16,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/accounts"
 	"github.com/marktantongco/freebuff-gateway/internal/alerting"
 	"github.com/marktantongco/freebuff-gateway/internal/api"
+	"github.com/marktantongco/freebuff-gateway/internal/middleware"
 	"github.com/marktantongco/freebuff-gateway/internal/authkeys"
 	"github.com/marktantongco/freebuff-gateway/internal/channelconfig"
 	"github.com/marktantongco/freebuff-gateway/internal/channels"
@@ -227,9 +228,35 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ok"))
 	})
+	// Build middleware chain
+	mwConfig := middleware.DefaultChainConfig()
+
+	// Rate limiting from env
+	if rps := os.Getenv("RATE_LIMIT_RPS"); rps != "" {
+		if v, err := strconv.ParseFloat(rps, 64); err == nil && v > 0 {
+			mwConfig.RateLimit.RequestsPerSecond = v
+		}
+	}
+	if burst := os.Getenv("RATE_LIMIT_BURST"); burst != "" {
+		if v, err := strconv.Atoi(burst); err == nil && v > 0 {
+			mwConfig.RateLimit.BurstSize = v
+		}
+	}
+
+	// CORS origins from env
+	if origins := os.Getenv("CORS_ALLOWED_ORIGINS"); origins != "" {
+		mwConfig.CORS.AllowedOrigins = strings.Split(origins, ",")
+	}
+
+	// Wrap the mux with the middleware chain
+	handler := middleware.DefaultChain(mux, mwConfig)
+
 	server := &http.Server{
-		Addr:    cfg.ListenAddr,
-		Handler: withRequestLogger(mux),
+		Addr:         cfg.ListenAddr,
+		Handler:      handler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -343,27 +370,4 @@ func getenvInt(key string, fallback int) int {
 	return n
 }
 
-func withRequestLogger(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		started := time.Now()
-		rw := &statusWriter{ResponseWriter: w, status: 200}
-		h.ServeHTTP(rw, r)
-		log.Printf("http %s %s -> %d %dms", r.Method, r.URL.Path, rw.status, time.Since(started).Milliseconds())
-	})
-}
 
-type statusWriter struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *statusWriter) WriteHeader(code int) {
-	w.status = code
-	w.ResponseWriter.WriteHeader(code)
-}
-
-func (w *statusWriter) Flush() {
-	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
-		flusher.Flush()
-	}
-}
