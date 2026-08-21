@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// BuildRouter creates the API mux with all routes.
 func BuildRouter(
 	admin *AdminHandler,
 	proxy *ProxyHandler,
