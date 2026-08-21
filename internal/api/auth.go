@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/marktantongco/freebuff-gateway/internal/authkeys"
+	"github.com/marktantongco/freebuff-gateway/internal/usermgmt"
 )
 
 const adminSessionCookie = "freebuffreverse_admin"
@@ -20,14 +21,27 @@ const adminSessionCookie = "freebuffreverse_admin"
 type AdminAuthenticator struct {
 	password string
 	ttl      time.Duration
+	userRepo *usermgmt.Repo // optional: multi-user login
 
 	mu       sync.Mutex
-	sessions map[string]time.Time
+	sessions map[string]sessionInfo
+}
+
+type sessionInfo struct {
+	expires  time.Time
+	userID   string
+	username string
+	role     string
 }
 
 type adminAuthStatus struct {
 	Authenticated bool  `json:"authenticated"`
 	ExpiresAt     int64 `json:"expires_at,omitempty"`
+	User          *struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
+	} `json:"user,omitempty"`
 }
 
 func NewAdminAuthenticator(password string, ttl time.Duration) *AdminAuthenticator {
@@ -37,18 +51,61 @@ func NewAdminAuthenticator(password string, ttl time.Duration) *AdminAuthenticat
 	return &AdminAuthenticator{
 		password: strings.TrimSpace(password),
 		ttl:      ttl,
-		sessions: make(map[string]time.Time),
+		sessions: make(map[string]sessionInfo),
 	}
+}
+
+// SetUserRepo enables multi-user login via the user repository.
+func (a *AdminAuthenticator) SetUserRepo(repo *usermgmt.Repo) {
+	a.userRepo = repo
 }
 
 func (a *AdminAuthenticator) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
+		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid json: "+err.Error())
 		return
 	}
+
+	// Multi-user login via repo
+	if a.userRepo != nil {
+		username := strings.TrimSpace(req.Username)
+		password := req.Password
+		if username == "" {
+			// Backward compat: if no username, treat password as the only field
+			username = "admin"
+		}
+		u, err := a.userRepo.Authenticate(username, password)
+		if err != nil {
+			writeJSONError(w, http.StatusUnauthorized, "invalid credentials")
+			return
+		}
+		token, err := randomToken()
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		expires := time.Now().Add(a.ttl)
+		a.mu.Lock()
+		a.sessions[tokenHash(token)] = sessionInfo{expires: expires, userID: u.ID, username: u.Username, role: u.Role}
+		a.mu.Unlock()
+		http.SetCookie(w, a.sessionCookie(r, token, expires, int(a.ttl.Seconds())))
+		writeJSON(w, http.StatusOK, adminAuthStatus{
+			Authenticated: true,
+			ExpiresAt:     expires.Unix(),
+			User: &struct {
+				ID       string `json:"id"`
+				Username string `json:"username"`
+				Role     string `json:"role"`
+			}{ID: u.ID, Username: u.Username, Role: u.Role},
+		})
+		return
+	}
+
+	// Legacy single-password fallback
 	if !a.passwordMatches(req.Password) {
 		writeJSONError(w, http.StatusUnauthorized, "invalid password")
 		return
@@ -60,7 +117,7 @@ func (a *AdminAuthenticator) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	expires := time.Now().Add(a.ttl)
 	a.mu.Lock()
-	a.sessions[tokenHash(token)] = expires
+	a.sessions[tokenHash(token)] = sessionInfo{expires: expires, userID: "legacy", username: "admin", role: "admin"}
 	a.mu.Unlock()
 	http.SetCookie(w, a.sessionCookie(r, token, expires, int(a.ttl.Seconds())))
 	writeJSON(w, http.StatusOK, adminAuthStatus{Authenticated: true, ExpiresAt: expires.Unix()})
@@ -77,8 +134,17 @@ func (a *AdminAuthenticator) Logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *AdminAuthenticator) Me(w http.ResponseWriter, r *http.Request) {
-	if expires, ok := a.validSession(r); ok {
-		writeJSON(w, http.StatusOK, adminAuthStatus{Authenticated: true, ExpiresAt: expires.Unix()})
+	si, ok := a.validSession(r)
+	if ok {
+		status := adminAuthStatus{Authenticated: true, ExpiresAt: si.expires.Unix()}
+		if si.userID != "" && si.userID != "legacy" {
+			status.User = &struct {
+				ID       string `json:"id"`
+				Username string `json:"username"`
+				Role     string `json:"role"`
+			}{ID: si.userID, Username: si.username, Role: si.role}
+		}
+		writeJSON(w, http.StatusOK, status)
 		return
 	}
 	writeJSON(w, http.StatusOK, adminAuthStatus{Authenticated: false})
@@ -86,9 +152,15 @@ func (a *AdminAuthenticator) Me(w http.ResponseWriter, r *http.Request) {
 
 func (a *AdminAuthenticator) Require(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if _, ok := a.validSession(r); !ok {
+		si, ok := a.validSession(r)
+		if !ok {
 			writeJSONError(w, http.StatusUnauthorized, "unauthorized")
 			return
+		}
+		if si.userID != "" {
+			r.Header.Set("X-User-ID", si.userID)
+			r.Header.Set("X-User-Role", si.role)
+			r.Header.Set("X-User-Name", si.username)
 		}
 		next(w, r)
 	}
@@ -106,24 +178,24 @@ func (a *AdminAuthenticator) passwordMatches(password string) bool {
 	return subtle.ConstantTimeCompare(expected, actual) == 1
 }
 
-func (a *AdminAuthenticator) validSession(r *http.Request) (time.Time, bool) {
+func (a *AdminAuthenticator) validSession(r *http.Request) (sessionInfo, bool) {
 	token, ok := a.sessionToken(r)
 	if !ok {
-		return time.Time{}, false
+		return sessionInfo{}, false
 	}
 	hash := tokenHash(token)
 	now := time.Now()
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	expires, ok := a.sessions[hash]
+	si, ok := a.sessions[hash]
 	if !ok {
-		return time.Time{}, false
+		return sessionInfo{}, false
 	}
-	if !expires.After(now) {
+	if !si.expires.After(now) {
 		delete(a.sessions, hash)
-		return time.Time{}, false
+		return sessionInfo{}, false
 	}
-	return expires, true
+	return si, true
 }
 
 func (a *AdminAuthenticator) sessionToken(r *http.Request) (string, bool) {

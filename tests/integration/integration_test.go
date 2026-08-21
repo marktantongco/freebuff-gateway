@@ -94,7 +94,7 @@ func setupTestEnv(t *testing.T) *testEnv {
 	adminAuth := api.NewAdminAuthenticator(adminPass, 1*time.Hour)
 	apiKeyAuth := api.NewAPIKeyAuthenticator(authKeyRepo)
 
-	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth)
+	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth, nil)
 
 	// Alerting
 	alertManager := alerting.NewManager(alerting.DefaultAlertConfig(), nil)

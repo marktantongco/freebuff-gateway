@@ -171,6 +171,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Metrics</span>
       </a>
+      <a class="nav-item" data-page="users" onclick="showPage('users')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Users</span>
+      </a>
     </div>
     <div class="sidebar-footer">
       <div id="uptime-display">Uptime: --</div>
@@ -325,6 +329,23 @@
         <pre id="metrics-display" style="background:var(--bg);padding:16px;border-radius:var(--radius);overflow-x:auto;font-size:12px;max-height:500px;overflow-y:auto;">Loading...</pre>
       </div>
     </div>
+
+    <!-- Users Page -->
+    <div id="page-users" class="page" style="display:none">
+      <div class="page-header">
+        <div>
+          <h2>User Management</h2>
+          <p class="subtitle">Manage admin and viewer users</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="showCreateUserModal()">+ New User</button>
+          <button class="btn btn-secondary" onclick="loadUsers()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="card">
+        <div id="users-table-wrap">Loading...</div>
+      </div>
+    </div>
   </div>
 
   <!-- Create Alert Modal -->
@@ -346,6 +367,27 @@
       <div class="modal-actions">
         <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="createAlert()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create User Modal -->
+  <div id="user-modal" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h3 id="user-modal-title">Create User</h3>
+      <input type="hidden" id="user-edit-id">
+      <label>Username</label>
+      <input id="user-username" placeholder="Enter username" style="margin-bottom:12px">
+      <label id="user-password-label">Password</label>
+      <input id="user-password" type="password" placeholder="Enter password (min 6 chars)" style="margin-bottom:12px">
+      <label>Role</label>
+      <select id="user-role" style="margin-bottom:12px">
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+      </select>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveUser()">Save</button>
       </div>
     </div>
   </div>
@@ -386,6 +428,7 @@
         case 'sessions': loadSessions(); break;
         case 'config': loadConfig(); break;
         case 'metrics': loadMetrics(); break;
+        case 'users': loadUsers(); break;
       }
     }
 
@@ -782,6 +825,105 @@
       connectWebSocket();
     }
 
+    // ─── User Management ───────────────────────────────────
+    async function loadUsers() {
+      try {
+        const data = await API.get('/api/admin/users');
+        const users = data.users || [];
+        let html = '<table style="width:100%;border-collapse:collapse"><thead><tr>';
+        html += '<th style="text-align:left;padding:10px;border-bottom:1px solid var(--border)">Username</th>';
+        html += '<th style="text-align:left;padding:10px;border-bottom:1px solid var(--border)">Role</th>';
+        html += '<th style="text-align:left;padding:10px;border-bottom:1px solid var(--border)">Status</th>';
+        html += '<th style="text-align:left;padding:10px;border-bottom:1px solid var(--border)">Actions</th>';
+        html += '</tr></thead><tbody>';
+        for (const u of users) {
+          const roleColor = u.role === 'admin' ? '#f59e0b' : '#3b82f6';
+          const statusBadge = u.active
+            ? '<span style="color:#22c55e">Active</span>'
+            : '<span style="color:#ef4444">Inactive</span>';
+          html += `<tr>
+            <td style="padding:10px;border-bottom:1px solid var(--border)">${u.username}</td>
+            <td style="padding:10px;border-bottom:1px solid var(--border)"><span style="color:${roleColor}">${u.role}</span></td>
+            <td style="padding:10px;border-bottom:1px solid var(--border)">${statusBadge}</td>
+            <td style="padding:10px;border-bottom:1px solid var(--border)">
+              <button class="btn btn-sm btn-secondary" onclick="editUser('${u.id}','${u.username}','${u.role}')" style="margin-right:4px">Edit</button>
+              <button class="btn btn-sm btn-danger" onclick="toggleUser('${u.id}',${!u.active})">${u.active ? 'Deactivate' : 'Activate'}</button>
+            </td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        if (users.length === 0) html = '<p style="color:var(--text2);padding:20px">No users found</p>';
+        document.getElementById('users-table-wrap').innerHTML = html;
+      } catch(e) {
+        document.getElementById('users-table-wrap').innerHTML = `<p style="color:#ef4444">Failed to load: ${e.message}</p>`;
+      }
+    }
+
+    function showCreateUserModal() {
+      document.getElementById('user-modal-title').textContent = 'Create User';
+      document.getElementById('user-edit-id').value = '';
+      document.getElementById('user-username').value = '';
+      document.getElementById('user-username').disabled = false;
+      document.getElementById('user-password').value = '';
+      document.getElementById('user-password').style.display = '';
+      document.getElementById('user-password-label').style.display = '';
+      document.getElementById('user-role').value = 'viewer';
+      document.getElementById('user-modal').style.display = 'flex';
+      document.getElementById('user-username').focus();
+    }
+
+    function editUser(id, username, role) {
+      document.getElementById('user-modal-title').textContent = 'Edit User';
+      document.getElementById('user-edit-id').value = id;
+      document.getElementById('user-username').value = username;
+      document.getElementById('user-username').disabled = true;
+      document.getElementById('user-password').value = '';
+      document.getElementById('user-password').placeholder = 'Leave blank to keep current';
+      document.getElementById('user-role').value = role;
+      document.getElementById('user-modal').style.display = 'flex';
+    }
+
+    function closeUserModal() {
+      document.getElementById('user-modal').style.display = 'none';
+    }
+
+    async function saveUser() {
+      const editId = document.getElementById('user-edit-id').value;
+      const username = document.getElementById('user-username').value.trim();
+      const password = document.getElementById('user-password').value;
+      const role = document.getElementById('user-role').value;
+
+      if (!username) { toast('Username required', 'error'); return; }
+      if (!editId && !password) { toast('Password required', 'error'); return; }
+      if (password && password.length < 6) { toast('Password must be at least 6 chars', 'error'); return; }
+
+      try {
+        if (editId) {
+          const body = { role };
+          if (password) body.password = password;
+          await API.request('PUT', `/api/admin/users/${editId}`, body);
+          toast('User updated');
+        } else {
+          await API.request('POST', '/api/admin/users', { username, password, role });
+          toast('User created');
+        }
+        closeUserModal();
+        loadUsers();
+      } catch(e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function toggleUser(id, activate) {
+      try {
+        await API.request('PUT', `/api/admin/users/${id}`, { active: activate });
+        toast(activate ? 'User activated' : 'User deactivated');
+        loadUsers();
+      } catch(e) {
+        toast(e.message, 'error');
+      }
+    }
+
     // ─── Init ────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', async () => {
       // Check if already authenticated
@@ -799,10 +941,13 @@
     document.getElementById('alert-modal').addEventListener('click', (e) => {
       if (e.target === e.currentTarget) closeModal();
     });
+    document.getElementById('user-modal').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeUserModal();
+    });
 
-    // Close modal on Escape
+    // Close modals on Escape
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Escape') { closeModal(); closeUserModal(); }
     });
   </script>
 </body>

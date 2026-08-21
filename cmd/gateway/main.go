@@ -33,6 +33,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/systemlogs"
 	"github.com/marktantongco/freebuff-gateway/internal/transport"
 	"github.com/marktantongco/freebuff-gateway/internal/usage"
+	"github.com/marktantongco/freebuff-gateway/internal/usermgmt"
 	"github.com/marktantongco/freebuff-gateway/internal/websocket"
 	"github.com/marktantongco/freebuff-gateway/web"
 )
@@ -64,6 +65,14 @@ func main() {
 	proxyResolver := proxypool.NewResolver(proxyPoolRepo)
 	authKeyRepo := authkeys.NewRepo(db)
 	systemLogRepo := systemlogs.NewRepo(db)
+	userRepo, err := usermgmt.NewRepo(db)
+	if err != nil {
+		log.Fatalf("usermgmt: %v", err)
+	}
+	if err := userRepo.Seed(cfg.AdminPassword); err != nil {
+		log.Printf("usermgmt: seed: %v", err)
+	}
+	log.Printf("usermgmt: user repository initialized")
 	policyResolver := runtimeconfig.NewResolver(channelConfigRepo, accountRepo)
 
 	tp := transport.New(
@@ -123,7 +132,9 @@ func main() {
 	)
 	proxyHandler := api.NewProxyHandler(registry, runner)
 	adminAuth := api.NewAdminAuthenticator(cfg.AdminPassword, cfg.AdminSessionTTL)
+	adminAuth.SetUserRepo(userRepo)
 	apiKeyAuth := api.NewAPIKeyAuthenticator(authKeyRepo)
+	userMgmtHandler := api.NewUserManagementHandler(userRepo)
 
 	// ─── Alerting System ────────────────────────────────────────
 	healthChecker := observability.NewHealthChecker("1.0.0")
@@ -209,7 +220,7 @@ func main() {
 	// Create alert handler for API routes
 	alertHandler := alerting.NewHandler(alertManager)
 
-	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth)
+	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth, userMgmtHandler)
 
 	// Register alerting API routes (protected by admin auth)
 	alertHandler.RegisterRoutes(mux)

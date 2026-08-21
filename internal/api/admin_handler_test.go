@@ -790,7 +790,7 @@ func TestFreeBuffGitHubProtocolLoginRunsThroughRouteWithoutProxy(t *testing.T) {
 		fakeTransport{},
 		WithSystemLogsRepo(systemLogRepo),
 	)
-	mux := BuildRouter(handler, NewProxyHandler(registry, nil), nil, nil, nil)
+	mux := BuildRouter(handler, NewProxyHandler(registry, nil), nil, nil, nil, nil)
 
 	credentials := "ada----pw-secret----totp-secret"
 	body, err := json.Marshal(map[string]any{
@@ -1043,7 +1043,7 @@ func waitFreeBuffGitHubProtocolJobViaMux(t *testing.T, mux http.Handler, jobID s
 
 func TestFreeBuffGitHubAutoLoginRoutesAreRemoved(t *testing.T) {
 	handler := NewAdminHandler(nil, accounts.NewPool(accounts.NewRepo(nil)), nil, nil, nil, nil)
-	mux := BuildRouter(handler, NewProxyHandler(nil, nil), nil, nil, nil)
+	mux := BuildRouter(handler, NewProxyHandler(nil, nil), nil, nil, nil, nil)
 
 	for _, tc := range []struct {
 		method string

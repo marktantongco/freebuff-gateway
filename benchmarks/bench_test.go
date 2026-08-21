@@ -83,7 +83,7 @@ func setupBenchServer(b *testing.B) *httptest.Server {
 	adminAuth := api.NewAdminAuthenticator("bench", 1*time.Hour)
 	apiKeyAuth := api.NewAPIKeyAuthenticator(authKeyRepo)
 
-	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth)
+	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth, nil)
 
 	alertManager := alerting.NewManager(alerting.DefaultAlertConfig(), nil)
 	alertHandler := alerting.NewHandler(alertManager)

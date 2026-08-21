@@ -14,6 +14,7 @@ func BuildRouter(
 	web fs.FS,
 	adminAuth *AdminAuthenticator,
 	apiKeyAuth *APIKeyAuthenticator,
+	userHandler *UserManagementHandler,
 ) *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -59,6 +60,16 @@ func BuildRouter(
 	mux.HandleFunc("GET /api/admin/usage/summary", requireAdmin(admin.ListUsageSummary))
 	mux.HandleFunc("GET /api/admin/usage/accounts", requireAdmin(admin.ListUsageAccounts))
 	mux.HandleFunc("GET /api/admin/usage/events", requireAdmin(admin.ListUsageEvents))
+
+	// User management routes
+	if userHandler != nil {
+		mux.HandleFunc("GET /api/admin/users", requireAdmin(userHandler.ListUsers))
+		mux.HandleFunc("POST /api/admin/users", requireAdmin(userHandler.CreateUser))
+		mux.HandleFunc("GET /api/admin/users/", requireAdmin(userHandler.GetUser))
+		mux.HandleFunc("PUT /api/admin/users/", requireAdmin(userHandler.UpdateUser))
+		mux.HandleFunc("DELETE /api/admin/users/", requireAdmin(userHandler.DeleteUser))
+		mux.HandleFunc("POST /api/admin/users/change-password", requireAdmin(userHandler.ChangePassword))
+	}
 
 	requireAPIKey := func(next http.HandlerFunc) http.HandlerFunc { return next }
 	if apiKeyAuth != nil {

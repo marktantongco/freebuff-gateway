@@ -37,6 +37,7 @@ func TestBuildRouterRegistersAdminAndModelAuthRoutes(t *testing.T) {
 		nil,
 		NewAdminAuthenticator("admin-pass", 0),
 		NewAPIKeyAuthenticator(keyRepo),
+		nil,
 	)
 
 	meReq := httptest.NewRequest(http.MethodGet, "/api/admin/me", nil)
