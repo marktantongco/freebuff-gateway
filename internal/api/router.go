@@ -74,6 +74,7 @@ func BuildRouter(
 	mux.HandleFunc("/channels/{id}", requireAPIKey(proxy.Handle))
 
 	if web != nil {
+		mux.Handle("/dashboard", dashboardHandler(web))
 		mux.Handle("/", webAppHandler(web))
 	}
 
@@ -111,4 +112,23 @@ func serveIndexHTML(web fs.FS, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write(body)
+}
+
+func dashboardHandler(web fs.FS) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			http.NotFound(w, r)
+			return
+		}
+		body, err := fs.ReadFile(web, "dashboard.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		if r.Method == http.MethodHead {
+			return
+		}
+		w.Write(body)
+	})
 }
