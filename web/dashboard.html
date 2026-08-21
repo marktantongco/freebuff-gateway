@@ -175,6 +175,14 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         <span>Users</span>
       </a>
+      <a class="nav-item" data-page="ratelimits" onclick="showPage('ratelimits')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Rate Limits</span>
+      </a>
+      <a class="nav-item" data-page="analytics" onclick="showPage('analytics')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Analytics</span>
+      </a>
     </div>
     <div class="sidebar-footer">
       <div id="uptime-display">Uptime: --</div>
@@ -346,6 +354,98 @@
         <div id="users-table-wrap">Loading...</div>
       </div>
     </div>
+
+    <!-- Rate Limits Page -->
+    <div id="page-ratelimits" class="page" style="display:none">
+      <div class="page-header">
+        <div>
+          <h2>Rate Limits</h2>
+          <p class="subtitle">Per-client rate limiting statistics</p>
+        </div>
+        <button class="btn btn-secondary" onclick="loadRateLimits()">↻ Refresh</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:var(--text)" id="rl-total-req">0</div>
+          <div style="font-size:12px;color:var(--text2)">Total Requests</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#22c55e" id="rl-allowed">0</div>
+          <div style="font-size:12px;color:var(--text2)">Allowed</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#ef4444" id="rl-rejected">0</div>
+          <div style="font-size:12px;color:var(--text2)">Rejected</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#f59e0b" id="rl-active">0</div>
+          <div style="font-size:12px;color:var(--text2)">Active Clients</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="card">
+          <div class="card-header"><h3>Top Clients</h3></div>
+          <div id="rl-top-clients" style="max-height:400px;overflow-y:auto">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Recent Rejections</h3></div>
+          <div id="rl-rejections" style="max-height:400px;overflow-y:auto">Loading...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Analytics Page -->
+    <div id="page-analytics" class="page" style="display:none">
+      <div class="page-header">
+        <div>
+          <h2>Usage Analytics</h2>
+          <p class="subtitle">API request analytics and performance</p>
+        </div>
+        <button class="btn btn-secondary" onclick="loadAnalytics()">↻ Refresh</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:var(--text)" id="an-total">0</div>
+          <div style="font-size:12px;color:var(--text2)">Total Requests</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#22c55e" id="an-success">0</div>
+          <div style="font-size:12px;color:var(--text2)">Success</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#ef4444" id="an-errors">0</div>
+          <div style="font-size:12px;color:var(--text2)">Errors</div>
+        </div>
+        <div class="card" style="text-align:center">
+          <div style="font-size:28px;font-weight:700;color:#3b82f6" id="an-latency">0ms</div>
+          <div style="font-size:12px;color:var(--text2)">Avg Latency</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div class="card">
+          <div class="card-header"><h3>Latency Percentiles</h3></div>
+          <div id="an-latency-pct" style="padding:12px">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Token Usage</h3></div>
+          <div id="an-tokens" style="padding:12px">Loading...</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="card">
+          <div class="card-header"><h3>Top Endpoints</h3></div>
+          <div id="an-endpoints" style="max-height:400px;overflow-y:auto">Loading...</div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Top Models</h3></div>
+          <div id="an-models" style="max-height:400px;overflow-y:auto">Loading...</div>
+        </div>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <div class="card-header"><h3>Status Code Distribution</h3></div>
+        <div id="an-status" style="padding:12px">Loading...</div>
+      </div>
+    </div>
   </div>
 
   <!-- Create Alert Modal -->
@@ -429,6 +529,8 @@
         case 'config': loadConfig(); break;
         case 'metrics': loadMetrics(); break;
         case 'users': loadUsers(); break;
+        case 'ratelimits': loadRateLimits(); break;
+        case 'analytics': loadAnalytics(); break;
       }
     }
 
@@ -823,6 +925,156 @@
       loadHealth();
       startAutoRefresh();
       connectWebSocket();
+    }
+
+    // ─── Rate Limits ──────────────────────────────────────
+    async function loadRateLimits() {
+      try {
+        const data = await API.get('/api/admin/rate-limits');
+        document.getElementById('rl-total-req').textContent = (data.total_requests || 0).toLocaleString();
+        document.getElementById('rl-allowed').textContent = (data.total_allowed || 0).toLocaleString();
+        document.getElementById('rl-rejected').textContent = (data.total_rejected || 0).toLocaleString();
+        document.getElementById('rl-active').textContent = (data.active_clients || 0).toLocaleString();
+
+        // Top clients table
+        const clients = data.top_clients || [];
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>';
+        html += '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Client</th>';
+        html += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Requests</th>';
+        html += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Rejected</th>';
+        html += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Reject %</th>';
+        html += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Avg Latency</th>';
+        html += '</tr></thead><tbody>';
+        for (const c of clients) {
+          const color = c.reject_rate > 50 ? '#ef4444' : c.reject_rate > 10 ? '#f59e0b' : '#22c55e';
+          html += `<tr>
+            <td style="padding:8px;border-bottom:1px solid var(--border)"><code style="font-size:12px">${c.key}</code></td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${c.requests}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:${c.rejected > 0 ? '#ef4444' : 'var(--text2)'}">${c.rejected}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:${color}">${c.reject_rate.toFixed(1)}%</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${c.avg_latency_ms ? c.avg_latency_ms.toFixed(0) + 'ms' : '-'}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+        if (clients.length === 0) html = '<p style="color:var(--text2);padding:20px">No client data yet</p>';
+        document.getElementById('rl-top-clients').innerHTML = html;
+
+        // Rejections table
+        const rejections = data.recent_rejections || [];
+        let rhtml = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>';
+        rhtml += '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Client</th>';
+        rhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Rejections</th>';
+        rhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Total</th>';
+        rhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Reject %</th>';
+        rhtml += '</tr></thead><tbody>';
+        for (const r of rejections) {
+          rhtml += `<tr>
+            <td style="padding:8px;border-bottom:1px solid var(--border)"><code style="font-size:12px">${r.key}</code></td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:#ef4444">${r.rejected}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${r.requests}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:#ef4444">${r.reject_rate.toFixed(1)}%</td>
+          </tr>`;
+        }
+        rhtml += '</tbody></table>';
+        if (rejections.length === 0) rhtml = '<p style="color:var(--text2);padding:20px">No rejections</p>';
+        document.getElementById('rl-rejections').innerHTML = rhtml;
+      } catch(e) {
+        console.error('Failed to load rate limits:', e);
+      }
+    }
+
+    // ─── Analytics ──────────────────────────────────────────
+    async function loadAnalytics() {
+      try {
+        const data = await API.get('/api/admin/analytics');
+        const s = data.summary || {};
+        document.getElementById('an-total').textContent = (s.total_requests || 0).toLocaleString();
+        document.getElementById('an-success').textContent = (s.success_count || 0).toLocaleString();
+        document.getElementById('an-errors').textContent = (s.error_count || 0).toLocaleString();
+        document.getElementById('an-latency').textContent = s.avg_latency_ms ? s.avg_latency_ms.toFixed(0) + 'ms' : '0ms';
+
+        // Latency percentiles
+        const lp = data.latency_percentiles || {};
+        document.getElementById('an-latency-pct').innerHTML = `
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
+            <div><div style="font-size:20px;font-weight:600">${lp.p50 || 0}ms</div><div style="font-size:11px;color:var(--text2)">P50</div></div>
+            <div><div style="font-size:20px;font-weight:600">${lp.p90 || 0}ms</div><div style="font-size:11px;color:var(--text2)">P90</div></div>
+            <div><div style="font-size:20px;font-weight:600">${lp.p95 || 0}ms</div><div style="font-size:11px;color:var(--text2)">P95</div></div>
+            <div><div style="font-size:20px;font-weight:600">${lp.p99 || 0}ms</div><div style="font-size:11px;color:var(--text2)">P99</div></div>
+            <div><div style="font-size:20px;font-weight:600">${lp.p75 || 0}ms</div><div style="font-size:11px;color:var(--text2)">P75</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:#ef4444">${lp.max || 0}ms</div><div style="font-size:11px;color:var(--text2)">Max</div></div>
+          </div>`;
+
+        // Token usage
+        const tk = data.tokens_summary || {};
+        document.getElementById('an-tokens').innerHTML = `
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">
+            <div><div style="font-size:20px;font-weight:600;color:#3b82f6">${(tk.total_in || 0).toLocaleString()}</div><div style="font-size:11px;color:var(--text2)">Tokens In</div></div>
+            <div><div style="font-size:20px;font-weight:600;color:#8b5cf6">${(tk.total_out || 0).toLocaleString()}</div><div style="font-size:11px;color:var(--text2)">Tokens Out</div></div>
+            <div><div style="font-size:20px;font-weight:600">${(tk.total || 0).toLocaleString()}</div><div style="font-size:11px;color:var(--text2)">Total Tokens</div></div>
+            <div><div style="font-size:20px;font-weight:600">${(tk.avg_per_request || 0).toFixed(0)}</div><div style="font-size:11px;color:var(--text2)">Avg/Request</div></div>
+          </div>`;
+
+        // Top endpoints
+        const endpoints = data.top_endpoints || [];
+        let ehtml = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>';
+        ehtml += '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Endpoint</th>';
+        ehtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Requests</th>';
+        ehtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Avg Latency</th>';
+        ehtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Error Rate</th>';
+        ehtml += '</tr></thead><tbody>';
+        for (const ep of endpoints) {
+          const ec = ep.error_rate > 10 ? '#ef4444' : ep.error_rate > 0 ? '#f59e0b' : '#22c55e';
+          ehtml += `<tr>
+            <td style="padding:8px;border-bottom:1px solid var(--border)"><code style="font-size:12px">${ep.path}</code></td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${ep.requests}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${ep.avg_latency_ms.toFixed(0)}ms</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:${ec}">${ep.error_rate.toFixed(1)}%</td>
+          </tr>`;
+        }
+        ehtml += '</tbody></table>';
+        if (endpoints.length === 0) ehtml = '<p style="color:var(--text2);padding:20px">No endpoint data yet</p>';
+        document.getElementById('an-endpoints').innerHTML = ehtml;
+
+        // Top models
+        const models = data.top_models || [];
+        let mhtml = '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr>';
+        mhtml += '<th style="text-align:left;padding:8px;border-bottom:1px solid var(--border)">Model</th>';
+        mhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Requests</th>';
+        mhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Avg Latency</th>';
+        mhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Tokens</th>';
+        mhtml += '<th style="text-align:right;padding:8px;border-bottom:1px solid var(--border)">Success</th>';
+        mhtml += '</tr></thead><tbody>';
+        for (const m of models) {
+          const mc = m.success_rate >= 99 ? '#22c55e' : m.success_rate >= 90 ? '#f59e0b' : '#ef4444';
+          mhtml += `<tr>
+            <td style="padding:8px;border-bottom:1px solid var(--border)"><code style="font-size:12px">${m.model}</code></td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${m.requests}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${m.avg_latency_ms.toFixed(0)}ms</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border)">${m.tokens_total.toLocaleString()}</td>
+            <td style="padding:8px;text-align:right;border-bottom:1px solid var(--border);color:${mc}">${m.success_rate.toFixed(1)}%</td>
+          </tr>`;
+        }
+        mhtml += '</tbody></table>';
+        if (models.length === 0) mhtml = '<p style="color:var(--text2);padding:20px">No model data yet</p>';
+        document.getElementById('an-models').innerHTML = mhtml;
+
+        // Status breakdown
+        const status = data.status_breakdown || [];
+        let shtml = '<div style="display:flex;gap:12px;flex-wrap:wrap">';
+        for (const st of status) {
+          const color = st.status < 300 ? '#22c55e' : st.status < 400 ? '#3b82f6' : st.status < 500 ? '#f59e0b' : '#ef4444';
+          shtml += `<div style="text-align:center;padding:8px 16px;border:1px solid ${color};border-radius:var(--radius)">
+            <div style="font-size:18px;font-weight:700;color:${color}">${st.status}</div>
+            <div style="font-size:11px;color:var(--text2)">${st.count} (${st.pct.toFixed(1)}%)</div>
+          </div>`;
+        }
+        shtml += '</div>';
+        if (status.length === 0) shtml = '<p style="color:var(--text2)">No status data</p>';
+        document.getElementById('an-status').innerHTML = shtml;
+      } catch(e) {
+        console.error('Failed to load analytics:', e);
+      }
     }
 
     // ─── User Management ───────────────────────────────────

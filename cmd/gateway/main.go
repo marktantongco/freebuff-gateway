@@ -17,6 +17,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/alerting"
 	"github.com/marktantongco/freebuff-gateway/internal/api"
 	"github.com/marktantongco/freebuff-gateway/internal/middleware"
+	rlimitt "github.com/marktantongco/freebuff-gateway/internal/ratelimit"
 	"github.com/marktantongco/freebuff-gateway/internal/authkeys"
 	"github.com/marktantongco/freebuff-gateway/internal/channelconfig"
 	"github.com/marktantongco/freebuff-gateway/internal/channels"
@@ -32,7 +33,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/storage"
 	"github.com/marktantongco/freebuff-gateway/internal/systemlogs"
 	"github.com/marktantongco/freebuff-gateway/internal/transport"
-	"github.com/marktantongco/freebuff-gateway/internal/usage"
+	usagepkg "github.com/marktantongco/freebuff-gateway/internal/usage"
 	"github.com/marktantongco/freebuff-gateway/internal/usermgmt"
 	"github.com/marktantongco/freebuff-gateway/internal/websocket"
 	"github.com/marktantongco/freebuff-gateway/web"
@@ -107,7 +108,7 @@ func main() {
 
 	logRepo := logs.NewRepo(db)
 	metricsAgg := metrics.NewAggregator()
-	usageRecorder := usage.NewRecorder(logRepo, metricsAgg, pool)
+	usageRecorder := usagepkg.NewRecorder(logRepo, metricsAgg, pool)
 
 	runner := orchestration.NewRunner(registry, sm, tp, usageRecorder)
 	proxyCheckConfig := proxypool.CheckerConfig{
@@ -220,10 +221,24 @@ func main() {
 	// Create alert handler for API routes
 	alertHandler := alerting.NewHandler(alertManager)
 
+	// ─── Rate Limit Tracker ───────────────────────────────────
+	rateLimitTracker := rlimitt.NewTracker(rlimitt.DefaultTrackerConfig())
+	defer rateLimitTracker.Stop()
+
+	// ─── Usage Analytics ────────────────────────────────────────
+	usageAnalytics := usagepkg.NewAnalytics(db)
+	// Load historical data from DB on startup
+	_ = usageAnalytics.LoadFromDB(5000)
+
 	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth, userMgmtHandler)
 
 	// Register alerting API routes (protected by admin auth)
 	alertHandler.RegisterRoutes(mux)
+
+	// Register rate limit and analytics API routes
+	mux.Handle("GET /api/admin/rate-limits", requireAdminAuth(rateLimitTracker.Handler()))
+	mux.Handle("GET /api/admin/analytics", requireAdminAuth(usageAnalytics.Handler()))
+	mux.Handle("GET /api/admin/analytics/live", requireAdminAuth(usageAnalytics.Handler()))
 
 	// ─── WebSocket ──────────────────────────────────────────────
 	wsHub := websocket.NewHub()
@@ -271,6 +286,9 @@ func main() {
 
 	// Wrap the mux with the middleware chain
 	handler := middleware.DefaultChain(mux, mwConfig)
+
+	// Wrap with rate limit tracker (records allowed/rejected decisions)
+	handler = rateLimitTracker.Middleware(handler)
 
 	server := &http.Server{
 		Addr:         cfg.ListenAddr,
@@ -351,6 +369,19 @@ func loadConfig() config {
 		SessionCreateMaxParallelPerGroup: getenvInt("SESSION_CREATE_MAX_PARALLEL_PER_GROUP", 96),
 	}
 	return c
+}
+
+// requireAdminAuth wraps a handler with admin authentication.
+func requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Check for valid session cookie
+		cookie, err := r.Cookie("freebuffreverse_admin")
+		if err != nil || cookie.Value == "" {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		next(w, r)
+	}
 }
 
 func getenv(key, fallback string) string {
