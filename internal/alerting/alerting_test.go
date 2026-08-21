@@ -1440,3 +1440,205 @@ func buildPagerDutyPayload(routingKey string, alert *Alert) map[string]interface
 		},
 	}
 }
+
+// ─── Metrics Tests ──────────────────────────────────────────
+
+// mockExporter implements MetricsExporter for testing.
+type mockExporter struct {
+ counters map[string]*mockCounter
+ gauges   map[string]*mockGauge
+}
+
+func newMockExporter() *mockExporter {
+ return &mockExporter{
+  counters: make(map[string]*mockCounter),
+  gauges:   make(map[string]*mockGauge),
+ }
+}
+
+func (e *mockExporter) NewCounter(name, help string) CounterMetric {
+ if c, ok := e.counters[name]; ok {
+  return c
+ }
+ c := &mockCounter{name: name}
+ e.counters[name] = c
+ return c
+}
+
+func (e *mockExporter) NewGauge(name, help string) GaugeMetric {
+ if g, ok := e.gauges[name]; ok {
+  return g
+ }
+ g := &mockGauge{name: name}
+ e.gauges[name] = g
+ return g
+}
+
+func (e *mockExporter) NewHistogram(name, help string, buckets []float64) HistogramMetric {
+ return &mockHistogram{name: name}
+}
+
+type mockCounter struct {
+ name  string
+ value float64
+}
+
+func (c *mockCounter) Inc()     { c.value++ }
+func (c *mockCounter) Add(v float64) { c.value += v }
+
+type mockGauge struct {
+ name  string
+ value float64
+}
+
+func (g *mockGauge) Set(v float64) { g.value = v }
+func (g *mockGauge) Add(v float64) { g.value += v }
+func (g *mockGauge) Sub(v float64) { g.value -= v }
+
+type mockHistogram struct {
+ name   string
+ values []float64
+}
+
+func (h *mockHistogram) Observe(v float64) { h.values = append(h.values, v) }
+
+func TestMetricsCollectorEmpty(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ metrics := collector.Collect()
+
+ if !strings.Contains(metrics, "freebuff_alerts_total") {
+  t.Fatal("expected alerts_total metric")
+ }
+ if !strings.Contains(metrics, "freebuff_alerts_by_severity") {
+  t.Fatal("expected alerts_by_severity metric")
+ }
+ if !strings.Contains(metrics, "freebuff_alerts_by_state") {
+  t.Fatal("expected alerts_by_state metric")
+ }
+ if !strings.Contains(metrics, "freebuff_alert_history_entries_total") {
+  t.Fatal("expected history metric")
+ }
+}
+
+func TestMetricsCollectorWithAlerts(t *testing.T) {
+ cfg := DefaultAlertConfig()
+ cfg.CooldownPeriod = 0
+ m := NewManager(cfg, nil)
+ ctx := context.Background()
+
+ // Fire some alerts
+ m.Evaluate(ctx, map[string]ComponentHealth{
+  "memory":   {Name: "memory", Status: HealthStatusUnhealthy, Message: "critical"},
+  "database": {Name: "database", Status: HealthStatusDegraded, Message: "warning"},
+ })
+
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+ metrics := collector.Collect()
+
+ // Should have metrics
+ if !strings.Contains(metrics, "freebuff_alerts_total") {
+  t.Fatal("expected alerts_total metric")
+ }
+}
+
+func TestMetricsCollectorContext(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ ctx := context.Background()
+ metrics, err := collector.CollectWithContext(ctx)
+ if err != nil {
+  t.Fatalf("unexpected error: %v", err)
+ }
+ if metrics == "" {
+  t.Fatal("expected non-empty metrics")
+ }
+}
+
+func TestMetricsCollectorContextCancelled(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ ctx, cancel := context.WithCancel(context.Background())
+ cancel()
+
+ _, err := collector.CollectWithContext(ctx)
+ if err == nil {
+  t.Fatal("expected error from cancelled context")
+ }
+}
+
+func TestMetricsCollectorHandler(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ handler := collector.Handler()
+ req := httptest.NewRequest("GET", "/metrics", nil)
+ rec := httptest.NewRecorder()
+ handler.ServeHTTP(rec, req)
+
+ if rec.Code != http.StatusOK {
+  t.Fatalf("expected 200, got %d", rec.Code)
+ }
+ if rec.Header().Get("Content-Type") != "text/plain; version=0.0.4; charset=utf-8" {
+  t.Fatalf("expected Prometheus content type, got %s", rec.Header().Get("Content-Type"))
+ }
+ if !strings.Contains(rec.Body.String(), "freebuff_alerts_total") {
+  t.Fatal("expected alerts_total in response")
+ }
+}
+
+func TestMetricsCollectorStartCollection(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ ctx, cancel := context.WithCancel(context.Background())
+ defer cancel()
+
+ collector.StartCollection(ctx, 100*time.Millisecond)
+
+ // Let it run briefly
+ time.Sleep(150*time.Millisecond)
+
+ // Verify it's collecting (no panic)
+ metrics := collector.Collect()
+ if metrics == "" {
+  t.Fatal("expected metrics after collection")
+ }
+}
+
+func TestMetricsFormat(t *testing.T) {
+ m := NewManager(DefaultAlertConfig(), nil)
+ exporter := newMockExporter()
+ collector := NewMetricsCollector(m, exporter)
+
+ metrics := collector.Collect()
+ lines := strings.Split(metrics, "\n")
+
+ // Check first few lines have proper Prometheus format
+ foundHelp := false
+ foundType := false
+ for _, line := range lines {
+  if strings.HasPrefix(line, "# HELP freebuff_alerts_total") {
+   foundHelp = true
+  }
+  if strings.HasPrefix(line, "# TYPE freebuff_alerts_total counter") {
+   foundType = true
+  }
+ }
+
+ if !foundHelp {
+  t.Fatal("expected HELP line for alerts_total")
+ }
+ if !foundType {
+  t.Fatal("expected TYPE line for alerts_total")
+ }
+}
