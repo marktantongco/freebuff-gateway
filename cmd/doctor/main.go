@@ -133,8 +133,7 @@ func checkGateway() Check {
 func checkProxyPool() Check {
 	c := Check{Name: "Proxy Pool", Pass: true}
 	// Check if proxy pool checker is available
-	out, err := exec.Command("go", "env", "GOPATH").Output()
-	if err == nil {
+	if _, err := exec.Command("go", "env", "GOPATH").Output(); err == nil {
 		c.Status = "available"
 	} else {
 		c.Status = "not configured"

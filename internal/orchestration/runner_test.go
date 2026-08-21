@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/logs"
-	"freebuff-reverse/internal/metrics"
-	"freebuff-reverse/internal/session"
-	"freebuff-reverse/internal/storage"
-	"freebuff-reverse/internal/usage"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/logs"
+	"github.com/marktantongco/freebuff-gateway/internal/metrics"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/usage"
 )
 
 type fakeAdapter struct {

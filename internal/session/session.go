@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 )
 
 type Health int32

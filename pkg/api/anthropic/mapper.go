@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/ferdiunal/freebuff-proxy/internal/openai"
+	"github.com/marktantongco/freebuff-gateway/pkg/api/openai"
 )
 
 const (

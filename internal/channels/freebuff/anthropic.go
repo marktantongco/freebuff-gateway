@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/phasetiming"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/phasetiming"
 )
 
 func decodeAnthropicBody(raw []byte) (map[string]any, string, bool, error) {

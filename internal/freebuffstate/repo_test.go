@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/session"
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 func TestRecordSessionStatePersistsAccountQuotaAndSession(t *testing.T) {

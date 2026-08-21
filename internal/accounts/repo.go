@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"freebuff-reverse/internal/idgen"
+	"github.com/marktantongco/freebuff-gateway/internal/idgen"
 )
 
 var ErrNotFound = errors.New("accounts: not found")

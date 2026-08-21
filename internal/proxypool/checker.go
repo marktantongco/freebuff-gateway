@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 )
 
 const defaultProbeURL = "http://ip-api.com/json/?fields=status,message,country,regionName,city,query"
@@ -147,7 +147,7 @@ func (c *Checker) probe(ctx context.Context, rec *Record) (*channels.OutboundRes
 	defer cancel()
 
 	headers := http.Header{}
-	headers.Set("User-Agent", "freebuff-reverse/proxy-health")
+	headers.Set("User-Agent", "github.com/marktantongco/freebuff-gateway/proxy-health")
 	headers.Set("Accept", "*/*")
 	headers.Set("Accept-Encoding", "identity")
 	req := &channels.OutboundRequest{

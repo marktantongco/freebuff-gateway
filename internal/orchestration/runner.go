@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/phasetiming"
-	"freebuff-reverse/internal/session"
-	"freebuff-reverse/internal/usage"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/phasetiming"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/usage"
 )
 
 type UsageRecorder interface {

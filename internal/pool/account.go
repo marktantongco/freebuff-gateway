@@ -1,7 +1,7 @@
 package pool
 
 import (
-	"kiro-go/config"
+	"github.com/marktantongco/freebuff-gateway/internal/config"
 	"strings"
 	"sync"
 	"sync/atomic"

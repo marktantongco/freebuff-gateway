@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"freebuff-reverse/internal/idgen"
+	"github.com/marktantongco/freebuff-gateway/internal/idgen"
 )
 
 const (

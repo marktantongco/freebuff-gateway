@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 )
 
 const defaultModel = "minimax/minimax-m2.7"

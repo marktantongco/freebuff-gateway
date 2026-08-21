@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/phasetiming"
-	"freebuff-reverse/internal/proxypool"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/phasetiming"
+	"github.com/marktantongco/freebuff-gateway/internal/proxypool"
 )
 
 const (
@@ -25,7 +25,7 @@ const (
 	defaultBaseURL     = "https://www.codebuff.com"
 	defaultAuthBaseURL = "https://freebuff.com"
 	defaultGitHubURL   = "https://github.com"
-	userAgent          = "freebuff-reverse/freebuff"
+	userAgent          = "github.com/marktantongco/freebuff-gateway/freebuff"
 
 	agentID = "base2-free"
 

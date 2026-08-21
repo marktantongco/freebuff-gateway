@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"kiro-go/config"
+	"github.com/marktantongco/freebuff-gateway/internal/config"
 	"net/http"
 	"time"
 )

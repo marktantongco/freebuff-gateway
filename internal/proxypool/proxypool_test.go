@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 func TestNormalizeAndRedactProxyURL(t *testing.T) {

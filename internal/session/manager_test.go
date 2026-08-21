@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/channels/freebuff"
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels/freebuff"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 type testAdapter struct {

@@ -7,9 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/idgen"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/idgen"
 )
 
 var (

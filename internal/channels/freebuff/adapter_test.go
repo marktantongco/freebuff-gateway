@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/phasetiming"
-	"freebuff-reverse/internal/proxypool"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/phasetiming"
+	"github.com/marktantongco/freebuff-gateway/internal/proxypool"
 )
 
 type recordedRequest struct {

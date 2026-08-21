@@ -8,7 +8,7 @@ import (
 	"io"
 	"os"
 
-	"freebuff-reverse/internal/channels/freebuff"
+	"github.com/marktantongco/freebuff-gateway/internal/channels/freebuff"
 )
 
 func main() {

@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/phasetiming"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/phasetiming"
 )
 
 type asyncTestTransport struct {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 
 	"golang.org/x/net/proxy"
 )

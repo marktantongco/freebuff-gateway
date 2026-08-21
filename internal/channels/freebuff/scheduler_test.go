@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/freebuffstate"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/freebuffstate"
 )
 
 func TestPremiumSchedulerPrefersCurrentWindowTouchedAccounts(t *testing.T) {

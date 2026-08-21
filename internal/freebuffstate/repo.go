@@ -9,9 +9,9 @@ import (
 	"math"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/freebufffacts"
-	"freebuff-reverse/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/freebufffacts"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
 )
 
 const (

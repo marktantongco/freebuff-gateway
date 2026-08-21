@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"math"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channelconfig"
-	"freebuff-reverse/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channelconfig"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
 )
 
 const (

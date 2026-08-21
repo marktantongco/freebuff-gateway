@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/freebufffacts"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/freebufffacts"
 )
 
 const (

@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	tlsclient "github.com/bogdanfinn/tls-client"

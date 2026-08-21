@@ -3,7 +3,6 @@ package contentfilter
 import (
 	"encoding/json"
 	"fmt"
-	"kiro-go/logger"
 	"os"
 	"regexp"
 	"strings"

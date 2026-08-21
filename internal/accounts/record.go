@@ -1,6 +1,6 @@
 package accounts
 
-import "freebuff-reverse/internal/channels"
+import "github.com/marktantongco/freebuff-gateway/internal/channels"
 
 type Record struct {
 	ID               string         `json:"id"`

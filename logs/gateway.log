@@ -1,0 +1,2 @@
+2026/08/21 21:51:39 gateway: listening on :30080
+2026/08/21 21:51:41 http GET /healthz -> 200 2ms

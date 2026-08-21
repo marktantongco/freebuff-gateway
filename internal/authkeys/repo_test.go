@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 func TestCreateListsAndAuthenticatesKeyWithoutPersistingSecret(t *testing.T) {

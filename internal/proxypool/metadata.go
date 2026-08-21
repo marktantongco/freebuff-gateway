@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 )
 
 const (

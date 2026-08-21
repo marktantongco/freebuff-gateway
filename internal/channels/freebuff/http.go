@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 )
 
 type upstreamSession struct {

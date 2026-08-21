@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 )

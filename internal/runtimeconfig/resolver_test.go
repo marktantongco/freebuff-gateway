@@ -4,10 +4,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channelconfig"
-	"freebuff-reverse/internal/session"
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channelconfig"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 func TestAccountMaxConcurrentMetadata(t *testing.T) {

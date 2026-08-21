@@ -1,6 +1,6 @@
 package freebuff
 
-import "freebuff-reverse/internal/channels"
+import "github.com/marktantongco/freebuff-gateway/internal/channels"
 
 func init() {
 	channels.RegisterBuiltin(func(r *channels.Registry) error {
