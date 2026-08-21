@@ -78,3 +78,31 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /' | sed 's/:.*//'
+
+## docker-build: Build Docker image
+docker-build:
+	docker build -t freebuff-gateway:latest .
+
+## docker-run: Run Docker container
+docker-run: docker-build
+	docker run -p 30080:30080 -e ADMIN_PASSWORD=test123 freebuff-gateway:latest
+
+## docker-compose-up: Start with docker-compose
+docker-compose-up:
+	docker-compose up -d
+
+## docker-compose-down: Stop docker-compose
+docker-compose-down:
+	docker-compose down
+
+## ci-local: Run CI checks locally
+ci-local: vet test build
+
+## vet: Run go vet
+vet:
+	go vet ./...
+
+## release-tag: Create a release tag
+release-tag:
+	@echo "Usage: make release-tag vX.Y.Z"
+	@echo "Example: make release-tag v1.0.0"

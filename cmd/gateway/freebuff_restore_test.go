@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"freebuff-reverse/internal/accounts"
-	"freebuff-reverse/internal/channels"
-	"freebuff-reverse/internal/freebuffstate"
-	"freebuff-reverse/internal/session"
-	"freebuff-reverse/internal/storage"
+	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/channels"
+	"github.com/marktantongco/freebuff-gateway/internal/freebuffstate"
+	"github.com/marktantongco/freebuff-gateway/internal/session"
+	"github.com/marktantongco/freebuff-gateway/internal/storage"
 )
 
 type gatewayRestoreAdapter struct {

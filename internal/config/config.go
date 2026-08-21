@@ -399,3 +399,82 @@ func (d *customDuration) UnmarshalJSON(data []byte) error {
 func (d customDuration) MarshalJSON() ([]byte, error) {
 	return json.Marshal(time.Duration(d).String())
 }
+
+// Account represents a provider account
+type Account struct {
+	ID       string `json:"id"`
+	Email    string `json:"email,omitempty"`
+	UserId   string `json:"userId,omitempty"`
+	Nickname string `json:"nickname,omitempty"`
+
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken"`
+	ClientID     string `json:"clientId,omitempty"`
+	ClientSecret string `json:"clientSecret,omitempty"`
+	AuthMethod   string `json:"authMethod"`
+	Provider     string `json:"provider,omitempty"`
+	Region       string `json:"region"`
+	StartUrl     string `json:"startUrl,omitempty"`
+	ExpiresAt    int64  `json:"expiresAt,omitempty"`
+	MachineId    string `json:"machineId,omitempty"`
+	ProfileArn   string `json:"profileArn,omitempty"`
+	ProxyURL     string `json:"proxyURL,omitempty"`
+
+	Weight int `json:"weight,omitempty"`
+
+	AllowOverage      bool    `json:"allowOverage,omitempty"`
+	OverageWeight     int     `json:"overageWeight,omitempty"`
+	OverageStatus     string  `json:"overageStatus,omitempty"`
+	OverageCapability string  `json:"overageCapability,omitempty"`
+	OverageCap        float64 `json:"overageCap,omitempty"`
+	OverageRate       float64 `json:"overageRate,omitempty"`
+	CurrentOverages   float64 `json:"currentOverages,omitempty"`
+	OverageCheckedAt  int64   `json:"overageCheckedAt,omitempty"`
+
+	Enabled   bool   `json:"enabled"`
+	BanStatus string `json:"banStatus,omitempty"`
+	BanReason string `json:"banReason,omitempty"`
+	BanTime   int64  `json:"banTime,omitempty"`
+
+	SubscriptionType  string `json:"subscriptionType,omitempty"`
+	SubscriptionTitle string `json:"subscriptionTitle,omitempty"`
+	DaysRemaining     int    `json:"daysRemaining,omitempty"`
+
+	UsageCurrent  float64 `json:"usageCurrent,omitempty"`
+	UsageLimit    float64 `json:"usageLimit,omitempty"`
+	UsagePercent  float64 `json:"usagePercent,omitempty"`
+	NextResetDate string  `json:"nextResetDate,omitempty"`
+	LastRefresh   int64   `json:"lastRefresh,omitempty"`
+
+	TrialUsageCurrent float64 `json:"trialUsageCurrent,omitempty"`
+	TrialUsageLimit   float64 `json:"trialUsageLimit,omitempty"`
+	TrialUsagePercent float64 `json:"trialUsagePercent,omitempty"`
+	TrialStatus       string  `json:"trialStatus,omitempty"`
+	TrialExpiresAt    int64   `json:"trialExpiresAt,omitempty"`
+
+	RequestCount int     `json:"requestCount,omitempty"`
+	ErrorCount   int     `json:"errorCount,omitempty"`
+	LastUsed     int64   `json:"lastUsed,omitempty"`
+	TotalTokens  int     `json:"totalTokens,omitempty"`
+	TotalCredits float64 `json:"totalCredits,omitempty"`
+}
+
+// GetEnabledAccounts returns all enabled accounts
+func GetEnabledAccounts() []Account {
+	return nil
+}
+
+// GetProxyURL returns the proxy URL for an account
+func GetProxyURL() string {
+	return ""
+}
+
+// GetAllowOverUsage returns whether overage is allowed
+func GetAllowOverUsage() bool {
+	return false
+}
+
+// UpdateAccountStats updates account statistics
+func UpdateAccountStats(id string, requestCount, errorCount, totalTokens int, totalCredits float64, lastUsed int64) error {
+	return nil
+}
