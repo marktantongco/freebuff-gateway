@@ -304,45 +304,161 @@ func (n *DiscordNotifier) Send(ctx context.Context, alert *Alert) error {
 	return nil
 }
 
-// EmailNotifier sends alerts via SMTP.
+// EmailConfig holds email notifier configuration.
+type EmailConfig struct {
+	Name     string   `json:"name"`
+	SMTPAddr string   `json:"smtp_addr"` // host:port
+	Username string   `json:"username"`
+	Password string   `json:"password"`
+	From     string   `json:"from"`
+	To       []string `json:"to"`
+	CC       []string `json:"cc,omitempty"`
+	BCC      []string `json:"bcc,omitempty"`
+	UseTLS   bool     `json:"use_tls"` // STARTTLS
+	HTML     bool     `json:"html"`    // send HTML emails
+}
+
+// EmailNotifier sends alerts via SMTP with HTML and plain text support.
 type EmailNotifier struct {
 	name     string
+	config   EmailConfig
 	smtpAddr string
 	from     string
 	to       []string
+	cc       []string
+	bcc      []string
 	auth     smtp.Auth
+	html     bool
 }
 
-// NewEmailNotifier creates an email notifier.
-func NewEmailNotifier(name, smtpAddr, username, password, from string, to []string) *EmailNotifier {
+// NewEmailNotifier creates an email notifier with full configuration.
+func NewEmailNotifier(cfg EmailConfig) *EmailNotifier {
 	var auth smtp.Auth
-	if username != "" {
-		auth = smtp.PlainAuth("", username, password, strings.Split(smtpAddr, ":")[0])
+	if cfg.Username != "" {
+		host := cfg.SMTPAddr
+		if idx := strings.LastIndex(host, ":"); idx > 0 {
+			host = host[:idx]
+		}
+		auth = smtp.PlainAuth("", cfg.Username, cfg.Password, host)
 	}
 	return &EmailNotifier{
-		name:     name,
-		smtpAddr: smtpAddr,
-		from:     from,
-		to:       to,
+		name:     cfg.Name,
+		config:   cfg,
+		smtpAddr: cfg.SMTPAddr,
+		from:     cfg.From,
+		to:       cfg.To,
+		cc:       cfg.CC,
+		bcc:      cfg.BCC,
 		auth:     auth,
+		html:     cfg.HTML,
 	}
 }
 
-func (n *EmailNotifier) Name() string  { return n.name }
+func (n *EmailNotifier) Name() string     { return n.name }
 func (n *EmailNotifier) Type() ChannelType { return ChannelEmail }
 
+// Send dispatches an alert via email. It builds a multipart/alternative message
+// with both plain text and HTML parts when HTML is enabled.
 func (n *EmailNotifier) Send(ctx context.Context, alert *Alert) error {
 	subject := fmt.Sprintf("[%s] Freebuff Alert: %s", strings.ToUpper(string(alert.Severity)), alert.Name)
-	body := fmt.Sprintf(
+
+	// Plain text body
+	plainBody := fmt.Sprintf(
 		"Alert: %s\nSeverity: %s\nState: %s\nSource: %s\nTime: %s\n\n%s",
 		alert.Name, alert.Severity, alert.State, alert.Source,
 		alert.FiredAt.Format(time.RFC3339), alert.Message,
 	)
 
-	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-		n.from, strings.Join(n.to, ","), subject, body)
+	var body string
+	if n.html {
+		htmlBody := buildEmailHTML(alert)
+		boundary := fmt.Sprintf("boundary_%s", alert.ID)
+		body = fmt.Sprintf(
+			"--%s\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s\r\n\r\n--%s\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s\r\n\r\n--%s--",
+			boundary, plainBody, boundary, htmlBody, boundary,
+		)
+	} else {
+		body = plainBody
+	}
 
-	return smtp.SendMail(n.smtpAddr, n.auth, n.from, n.to, []byte(msg))
+	// Collect all recipients
+	allTo := make([]string, 0, len(n.to)+len(n.cc)+len(n.bcc))
+	allTo = append(allTo, n.to...)
+	allTo = append(allTo, n.cc...)
+	allTo = append(allTo, n.bcc...)
+
+	// Build headers
+	var headers strings.Builder
+	fmt.Fprintf(&headers, "From: %s\r\n", n.from)
+	fmt.Fprintf(&headers, "To: %s\r\n", strings.Join(n.to, ", "))
+	if len(n.cc) > 0 {
+		fmt.Fprintf(&headers, "Cc: %s\r\n", strings.Join(n.cc, ", "))
+	}
+	fmt.Fprintf(&headers, "Subject: %s\r\n", subject)
+	fmt.Fprintf(&headers, "Date: %s\r\n", time.Now().UTC().Format(time.RFC1123Z))
+	fmt.Fprintf(&headers, "Message-ID: <%s@freebuff-gateway>\r\n", alert.ID)
+
+	if n.html {
+		boundary := fmt.Sprintf("boundary_%s", alert.ID)
+		fmt.Fprintf(&headers, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary)
+	} else {
+		fmt.Fprintf(&headers, "Content-Type: text/plain; charset=UTF-8\r\n")
+	}
+
+	msg := headers.String() + "\r\n" + body
+
+	// Connect and send
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("email: context cancelled: %w", err)
+	}
+
+	// Use net/smtp for sending (SMTP-level TLS handled by server config)
+	return smtp.SendMail(n.smtpAddr, n.auth, n.from, allTo, []byte(msg))
+}
+
+// buildEmailHTML generates an HTML email body for the alert.
+func buildEmailHTML(alert *Alert) string {
+	color := "#10b981" // green for info
+	switch alert.Severity {
+	case SeverityWarning:
+		color = "#f59e0b"
+	case SeverityCritical:
+		color = "#ef4444"
+	}
+
+	stateBg := "#10b981"
+	if alert.State == StateFiring {
+		stateBg = "#ef4444"
+	} else if alert.State == StateResolved {
+		stateBg = "#10b981"
+	}
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 20px; background: #f8fafc;">
+<div style="max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden;">
+  <div style="background: %s; padding: 20px 24px;">
+    <h1 style="color: white; margin: 0; font-size: 18px;">🔔 Freebuff Alert</h1>
+  </div>
+  <div style="padding: 24px;">
+    <h2 style="margin: 0 0 16px; color: #1e293b; font-size: 20px;">%s</h2>
+    <table style="width: 100%%; border-collapse: collapse; margin-bottom: 16px;">
+      <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #e2e8f0;">Severity</td><td style="padding: 8px 0; color: %s; font-weight: 600; border-bottom: 1px solid #e2e8f0;">%s</td></tr>
+      <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #e2e8f0;">State</td><td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;"><span style="background: %s; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px;">%s</span></td></tr>
+      <tr><td style="padding: 8px 0; color: #64748b; border-bottom: 1px solid #e2e8f0;">Source</td><td style="padding: 8px 0; color: #1e293b; border-bottom: 1px solid #e2e8f0;">%s</td></tr>
+      <tr><td style="padding: 8px 0; color: #64748b;">Time</td><td style="padding: 8px 0; color: #1e293b;">%s</td></tr>
+    </table>
+    <div style="background: #f1f5f9; border-radius: 8px; padding: 16px; margin-top: 16px;">
+      <p style="margin: 0; color: #475569; font-size: 14px; line-height: 1.6;">%s</p>
+    </div>
+  </div>
+  <div style="padding: 12px 24px; background: #f8fafc; border-top: 1px solid #e2e8f0;">
+    <p style="margin: 0; color: #94a3b8; font-size: 12px;">Freebuff Gateway Alerting System</p>
+  </div>
+</div>
+</body>
+</html>`, color, alert.Name, color, string(alert.Severity), stateBg, string(alert.State), alert.Source, alert.FiredAt.Format(time.RFC3339), alert.Message)
 }
 
 // PagerDutyNotifier sends alerts via PagerDuty Events API v2.

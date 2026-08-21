@@ -1,10 +1,15 @@
 package alerting
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/textproto"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -864,4 +869,375 @@ func (r *stringReader) Read(p []byte) (int, error) {
 	n := copy(p, r.s[r.i:])
 	r.i += n
 	return n, nil
+}
+
+// ─── Mock SMTP Server (textproto-based) ────────────────────
+
+type mockSMTPServer struct {
+	mu       sync.Mutex
+	received []string
+	listener net.Listener
+}
+
+func newMockSMTPServer(t *testing.T) *mockSMTPServer {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to start mock SMTP: %v", err)
+	}
+	s := &mockSMTPServer{listener: ln}
+	go s.serve()
+	return s
+}
+
+func (s *mockSMTPServer) Addr() string {
+	return s.listener.Addr().String()
+}
+
+func (s *mockSMTPServer) serve() {
+	for {
+		conn, err := s.listener.Accept()
+		if err != nil {
+			return
+		}
+		go s.handleConn(conn)
+	}
+}
+
+func (s *mockSMTPServer) handleConn(conn net.Conn) {
+	defer conn.Close()
+
+	// Set read/write deadlines to prevent hangs
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+
+	// Use textproto reader to match what Go's smtp client uses
+	r := textproto.NewReader(bufio.NewReader(conn))
+
+	// Send greeting
+	fmt.Fprintf(conn, "220 Mock SMTP Ready\r\n")
+
+	var msg strings.Builder
+	for {
+		line, err := r.ReadLine()
+		if err != nil {
+			return
+		}
+		cmd := strings.ToUpper(strings.TrimSpace(line))
+
+		if strings.HasPrefix(cmd, "EHLO") || strings.HasPrefix(cmd, "HELO") {
+			fmt.Fprintf(conn, "250-8BITMIME\r\n")
+			fmt.Fprintf(conn, "250 AUTH PLAIN LOGIN\r\n")
+		} else if strings.HasPrefix(cmd, "AUTH PLAIN") {
+			fmt.Fprintf(conn, "235 Authentication successful\r\n")
+		} else if strings.HasPrefix(cmd, "MAIL FROM") {
+			fmt.Fprintf(conn, "250 OK\r\n")
+		} else if strings.HasPrefix(cmd, "RCPT TO") {
+			fmt.Fprintf(conn, "250 OK\r\n")
+		} else if strings.HasPrefix(cmd, "DATA") {
+			fmt.Fprintf(conn, "354 End data with <CR><LF>.<CR><LF>\r\n")
+			// Read lines until standalone dot
+			for {
+				l, readErr := r.ReadLine()
+				if readErr != nil {
+					break
+				}
+				if l == "." {
+					break
+				}
+				msg.WriteString(l + "\n")
+			}
+			fmt.Fprintf(conn, "250 OK\r\n")
+		} else if strings.HasPrefix(cmd, "QUIT") {
+			fmt.Fprintf(conn, "221 Bye\r\n")
+			break
+		} else {
+			fmt.Fprintf(conn, "250 OK\r\n")
+		}
+	}
+
+	s.mu.Lock()
+	s.received = append(s.received, msg.String())
+	s.mu.Unlock()
+}
+
+func (s *mockSMTPServer) lastMessage() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.received) == 0 {
+		return ""
+	}
+	return s.received[len(s.received)-1]
+}
+
+func (s *mockSMTPServer) messageCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.received)
+}
+
+func (s *mockSMTPServer) Close() {
+	s.listener.Close()
+}
+
+func TestEmailNotifierPlainText(t *testing.T) {
+	srv := newMockSMTPServer(t)
+	defer srv.Close()
+
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-email",
+		SMTPAddr: srv.Addr(),
+		Username: "user",
+		Password: "pass",
+		From:     "alerts@freebuff.io",
+		To:       []string{"admin@example.com"},
+		HTML:     false,
+	})
+
+	alert := &Alert{
+		Name:     "High Latency",
+		Severity: SeverityWarning,
+		State:    StateFiring,
+		Source:   "provider/openai",
+		Message:  "P99 latency exceeded 5s",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(context.Background(), alert)
+	if err != nil {
+		t.Fatalf("email send failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	msg := srv.lastMessage()
+	if !strings.Contains(msg, "Subject: [WARNING] Freebuff Alert: High Latency") {
+		t.Fatalf("expected subject in email, got: %s", msg)
+	}
+	if !strings.Contains(msg, "P99 latency exceeded 5s") {
+		t.Fatalf("expected message body in email")
+	}
+	if !strings.Contains(msg, "text/plain; charset=UTF-8") {
+		t.Fatalf("expected plain text content type")
+	}
+}
+
+func TestEmailNotifierHTML(t *testing.T) {
+	srv := newMockSMTPServer(t)
+	defer srv.Close()
+
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-html",
+		SMTPAddr: srv.Addr(),
+		Username: "user",
+		Password: "pass",
+		From:     "alerts@freebuff.io",
+		To:       []string{"admin@example.com"},
+		HTML:     true,
+	})
+
+	alert := &Alert{
+		Name:     "Service Down",
+		Severity: SeverityCritical,
+		State:    StateFiring,
+		Source:   "health-check",
+		Message:  "Gateway unreachable",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(context.Background(), alert)
+	if err != nil {
+		t.Fatalf("email send failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	msg := srv.lastMessage()
+
+	// Verify multipart
+	if !strings.Contains(msg, "multipart/alternative") {
+		t.Fatalf("expected multipart/alternative content type")
+	}
+	if !strings.Contains(msg, "text/plain; charset=UTF-8") {
+		t.Fatalf("expected plain text part")
+	}
+	if !strings.Contains(msg, "text/html; charset=UTF-8") {
+		t.Fatalf("expected HTML part")
+	}
+	// Verify HTML body
+	if !strings.Contains(msg, "Freebuff Alert") {
+		t.Fatalf("expected HTML heading")
+	}
+	if !strings.Contains(msg, "Service Down") {
+		t.Fatalf("expected alert name in HTML")
+	}
+}
+
+func TestEmailNotifierCCAndBCC(t *testing.T) {
+	srv := newMockSMTPServer(t)
+	defer srv.Close()
+
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-cc",
+		SMTPAddr: srv.Addr(),
+		From:     "alerts@freebuff.io",
+		To:       []string{"admin@example.com"},
+		CC:       []string{"dev@example.com"},
+		BCC:      []string{"ops@example.com"},
+	})
+
+	alert := &Alert{
+		Name:     "Test",
+		Severity: SeverityInfo,
+		State:    StateFiring,
+		Source:   "test",
+		Message:  "cc/bcc test",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(context.Background(), alert)
+	if err != nil {
+		t.Fatalf("email send failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	msg := srv.lastMessage()
+
+	if !strings.Contains(msg, "Cc: dev@example.com") {
+		t.Fatalf("expected Cc header, got: %s", msg)
+	}
+}
+
+func TestEmailNotifierContextCancelled(t *testing.T) {
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-cancel",
+		SMTPAddr: "127.0.0.1:19999", // unreachable
+		From:     "alerts@freebuff.io",
+		To:       []string{"admin@example.com"},
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	alert := &Alert{
+		Name:     "Test",
+		Severity: SeverityInfo,
+		State:    StateFiring,
+		Source:   "test",
+		Message:  "cancelled",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(ctx, alert)
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
+	}
+	if !strings.Contains(err.Error(), "context cancelled") {
+		t.Fatalf("expected context cancelled error, got: %v", err)
+	}
+}
+
+func TestEmailNotifierNoAuth(t *testing.T) {
+	srv := newMockSMTPServer(t)
+	defer srv.Close()
+
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-noauth",
+		SMTPAddr: srv.Addr(),
+		From:     "alerts@freebuff.io",
+		To:       []string{"admin@example.com"},
+	})
+
+	alert := &Alert{
+		Name:     "Test",
+		Severity: SeverityInfo,
+		State:    StateFiring,
+		Source:   "test",
+		Message:  "no auth",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(context.Background(), alert)
+	if err != nil {
+		t.Fatalf("email send failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	if srv.messageCount() != 1 {
+		t.Fatalf("expected 1 message, got %d", srv.messageCount())
+	}
+}
+
+func TestEmailNotifierMultipleRecipients(t *testing.T) {
+	srv := newMockSMTPServer(t)
+	defer srv.Close()
+
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "test-multi",
+		SMTPAddr: srv.Addr(),
+		From:     "alerts@freebuff.io",
+		To:       []string{"a@example.com", "b@example.com", "c@example.com"},
+	})
+
+	alert := &Alert{
+		Name:     "Multi",
+		Severity: SeverityInfo,
+		State:    StateFiring,
+		Source:   "test",
+		Message:  "multi recipient",
+		FiredAt:  time.Now(),
+	}
+
+	err := n.Send(context.Background(), alert)
+	if err != nil {
+		t.Fatalf("email send failed: %v", err)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+	msg := srv.lastMessage()
+	if !strings.Contains(msg, "To: a@example.com, b@example.com, c@example.com") {
+		t.Fatalf("expected all recipients in To header, got: %s", msg)
+	}
+}
+
+func TestBuildEmailHTML(t *testing.T) {
+	alert := &Alert{
+		Name:     "Test Alert",
+		Severity: SeverityCritical,
+		State:    StateFiring,
+		Source:   "test-source",
+		Message:  "This is a test",
+		FiredAt:  time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+	}
+
+	html := buildEmailHTML(alert)
+
+	if !strings.Contains(html, "Test Alert") {
+		t.Fatal("expected alert name in HTML")
+	}
+	if !strings.Contains(html, "critical") {
+		t.Fatal("expected severity in HTML")
+	}
+	if !strings.Contains(html, "firing") {
+		t.Fatal("expected state in HTML")
+	}
+	if !strings.Contains(html, "test-source") {
+		t.Fatal("expected source in HTML")
+	}
+	if !strings.Contains(html, "Freebuff Gateway") {
+		t.Fatal("expected gateway branding in HTML")
+	}
+}
+
+func TestEmailNotifierNameAndType(t *testing.T) {
+	n := NewEmailNotifier(EmailConfig{
+		Name:     "ops-email",
+		SMTPAddr: "smtp.example.com:587",
+		From:     "alerts@example.com",
+		To:       []string{"admin@example.com"},
+	})
+
+	if n.Name() != "ops-email" {
+		t.Fatalf("expected name 'ops-email', got %s", n.Name())
+	}
+	if n.Type() != ChannelEmail {
+		t.Fatalf("expected ChannelEmail type, got %s", n.Type())
+	}
 }
