@@ -1,0 +1,859 @@
+openapi: 3.0.3
+info:
+  title: Freebuff Gateway API
+  description: |
+    Unified AI gateway with multi-provider routing, session management,
+    alerting, and real-time monitoring.
+  version: 1.0.0
+  contact:
+    name: Freebuff Gateway
+    url: https://github.com/marktantongco/freebuff-gateway
+
+servers:
+  - url: http://localhost:30080
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health and observability endpoints
+  - name: Auth
+    description: Admin authentication
+  - name: Admin
+    description: Admin management endpoints
+  - name: Models
+    description: AI model registry
+  - name: Proxy
+    description: Chat completions proxy
+  - name: Alerts
+    description: Alerting system
+  - name: WebSocket
+    description: Real-time updates
+
+components:
+  securitySchemes:
+    AdminSession:
+      type: apiKey
+      in: cookie
+      name: freebuffreverse_admin
+      description: Admin session cookie from POST /api/admin/login
+    APIKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for model access
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token for model access
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        version:
+          type: string
+        uptime:
+          type: integer
+          format: int64
+        goroutines:
+          type: integer
+        components:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ComponentHealth'
+
+    ComponentHealth:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        message:
+          type: string
+        last_check:
+          type: string
+          format: date-time
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        state:
+          type: string
+          enum: [firing, resolved, silenced]
+        source:
+          type: string
+        message:
+          type: string
+        fired_at:
+          type: string
+          format: date-time
+
+    CreateAlertRequest:
+      type: object
+      required: [name, severity]
+      properties:
+        name:
+          type: string
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        source:
+          type: string
+        message:
+          type: string
+
+    LoginRequest:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    LoginResponse:
+      type: object
+      properties:
+        authenticated:
+          type: boolean
+        expires_at:
+          type: integer
+          format: int64
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+    ChatCompletionRequest:
+      type: object
+      required: [model, messages]
+      properties:
+        model:
+          type: string
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        stream:
+          type: boolean
+        temperature:
+          type: number
+        max_tokens:
+          type: integer
+
+    Message:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant]
+        content:
+          type: string
+
+    ModelList:
+      type: object
+      properties:
+        object:
+          type: string
+          enum: [list]
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Model'
+
+    Model:
+      type: object
+      properties:
+        id:
+          type: string
+        object:
+          type: string
+          enum: [model]
+        created:
+          type: integer
+        owned_by:
+          type: string
+
+    WSStatus:
+      type: object
+      properties:
+        connected_clients:
+          type: integer
+
+    AlertStats:
+      type: object
+      properties:
+        stats:
+          type: object
+          properties:
+            total:
+              type: integer
+            firing:
+              type: integer
+            resolved:
+              type: integer
+            silenced:
+              type: integer
+
+    AlertHistory:
+      type: object
+      properties:
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              alert_id:
+                type: string
+              from:
+                type: string
+              to:
+                type: string
+              message:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+
+paths:
+  # ─── Health & Observability ───────────────────────────────
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Full health status
+      description: Returns detailed health status with all component checks
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness probe
+      description: Returns 200 if the service is ready to accept traffic
+      responses:
+        '200':
+          description: Ready
+
+  /livez:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      description: Returns 200 if the service is alive
+      responses:
+        '200':
+          description: Alive
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics
+      description: Returns metrics in Prometheus text format
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  # ─── Dashboard ────────────────────────────────────────────
+  /dashboard:
+    get:
+      tags: [Admin]
+      summary: Web dashboard
+      description: Returns the admin dashboard SPA (requires auth in browser)
+      responses:
+        '200':
+          description: Dashboard HTML
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # ─── Auth ─────────────────────────────────────────────────
+  /api/admin/login:
+    post:
+      tags: [Auth]
+      summary: Admin login
+      description: Authenticate with admin password, returns session cookie
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+        '401':
+          description: Invalid password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/admin/logout:
+    post:
+      tags: [Auth]
+      summary: Admin logout
+      description: Clear session cookie
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Logged out
+
+  /api/admin/me:
+    get:
+      tags: [Auth]
+      summary: Check auth status
+      description: Returns whether the current session is authenticated
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Auth status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  authenticated:
+                    type: boolean
+
+  # ─── Admin Channels ───────────────────────────────────────
+  /api/admin/channels:
+    get:
+      tags: [Admin]
+      summary: List channels
+      description: List all configured AI provider channels
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Channel list
+        '401':
+          description: Not authenticated
+
+  /api/admin/channels/{id}/config:
+    put:
+      tags: [Admin]
+      summary: Update channel config
+      description: Update configuration for a specific channel
+      security:
+        - AdminSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Config updated
+        '401':
+          description: Not authenticated
+
+  # ─── Admin Freebuff ───────────────────────────────────────
+  /api/admin/freebuff/models:
+    get:
+      tags: [Admin]
+      summary: List Freebuff models
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Model list
+
+  /api/admin/freebuff/proxies:
+    get:
+      tags: [Admin]
+      summary: List Freebuff proxies
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Proxy list
+
+  /api/admin/freebuff/accounts:
+    get:
+      tags: [Admin]
+      summary: List Freebuff accounts
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Account list
+
+  /api/admin/freebuff/scheduler:
+    get:
+      tags: [Admin]
+      summary: Get scheduler status
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Scheduler status
+
+  # ─── Admin Auth Keys ──────────────────────────────────────
+  /api/admin/auth-keys:
+    get:
+      tags: [Admin]
+      summary: List API keys
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: API key list
+
+    post:
+      tags: [Admin]
+      summary: Create API key
+      security:
+        - AdminSession: []
+      responses:
+        '201':
+          description: Key created
+
+  /api/admin/auth-keys/{id}:
+    delete:
+      tags: [Admin]
+      summary: Delete API key
+      security:
+        - AdminSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Key deleted
+
+  # ─── Admin Accounts ───────────────────────────────────────
+  /api/admin/accounts:
+    get:
+      tags: [Admin]
+      summary: List all accounts
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Account list
+
+    post:
+      tags: [Admin]
+      summary: Create account
+      security:
+        - AdminSession: []
+      responses:
+        '201':
+          description: Account created
+
+  /api/admin/accounts/{id}:
+    put:
+      tags: [Admin]
+      summary: Update account
+      security:
+        - AdminSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account updated
+
+    delete:
+      tags: [Admin]
+      summary: Delete account
+      security:
+        - AdminSession: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Account deleted
+
+  # ─── Admin Sessions ───────────────────────────────────────
+  /api/admin/sessions:
+    get:
+      tags: [Admin]
+      summary: List active sessions
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Session list
+
+  # ─── Admin Logs ───────────────────────────────────────────
+  /api/admin/logs:
+    get:
+      tags: [Admin]
+      summary: List logs
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Log entries
+
+  /api/admin/system-logs:
+    get:
+      tags: [Admin]
+      summary: List system logs
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: System log entries
+
+  # ─── Admin Metrics ────────────────────────────────────────
+  /api/admin/metrics:
+    get:
+      tags: [Admin]
+      summary: List metrics
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Metrics data
+
+  /api/admin/metrics/series:
+    get:
+      tags: [Admin]
+      summary: List metric time series
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Metric series data
+
+  # ─── Admin Usage ──────────────────────────────────────────
+  /api/admin/usage/summary:
+    get:
+      tags: [Admin]
+      summary: Usage summary
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Usage summary
+
+  /api/admin/usage/accounts:
+    get:
+      tags: [Admin]
+      summary: Per-account usage
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Account usage data
+
+  /api/admin/usage/events:
+    get:
+      tags: [Admin]
+      summary: Usage events
+      security:
+        - AdminSession: []
+      responses:
+        '200':
+          description: Usage event log
+
+  # ─── Models API ───────────────────────────────────────────
+  /v1/models:
+    get:
+      tags: [Models]
+      summary: List available models
+      description: Returns list of all available AI models
+      security:
+        - APIKey: []
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Model list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelList'
+        '401':
+          description: Authentication required
+
+  /v1/models/{modelID}:
+    get:
+      tags: [Models]
+      summary: Get model details
+      security:
+        - APIKey: []
+        - BearerAuth: []
+      parameters:
+        - name: modelID
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Model details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Model'
+        '404':
+          description: Model not found
+
+  # ─── Proxy ────────────────────────────────────────────────
+  /v1/chat/completions:
+    post:
+      tags: [Proxy]
+      summary: Chat completions (OpenAI-compatible)
+      description: |
+        Forward chat completion requests to the appropriate provider.
+        Supports both streaming and non-streaming responses.
+      security:
+        - APIKey: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatCompletionRequest'
+      responses:
+        '200':
+          description: Chat completion response
+        '401':
+          description: Authentication required
+        '429':
+          description: Rate limit exceeded
+
+  /v1/messages:
+    post:
+      tags: [Proxy]
+      summary: Messages (Anthropic-compatible)
+      description: Forward messages to Anthropic-compatible providers
+      security:
+        - APIKey: []
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Message response
+        '401':
+          description: Authentication required
+
+  /channels/{id}:
+    post:
+      tags: [Proxy]
+      summary: Channel-specific proxy
+      description: Forward requests to a specific channel adapter
+      security:
+        - APIKey: []
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Proxied response
+        '401':
+          description: Authentication required
+
+  # ─── Alerting ─────────────────────────────────────────────
+  /api/alerts:
+    get:
+      tags: [Alerts]
+      summary: List alerts
+      description: List all alerts with optional state/severity filters
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+            enum: [firing, resolved, silenced]
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [info, warning, critical]
+      responses:
+        '200':
+          description: Alert list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+                  count:
+                    type: integer
+
+    post:
+      tags: [Alerts]
+      summary: Create alert
+      description: Manually create a new alert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAlertRequest'
+      responses:
+        '201':
+          description: Alert created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+
+  /api/alerts/{id}:
+    get:
+      tags: [Alerts]
+      summary: Get alert by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alert'
+        '404':
+          description: Alert not found
+
+  /api/alerts/{id}/ack:
+    post:
+      tags: [Alerts]
+      summary: Acknowledge alert
+      description: Acknowledge a firing alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert acknowledged
+
+  /api/alerts/{id}/silence:
+    post:
+      tags: [Alerts]
+      summary: Silence alert
+      description: Silence a firing alert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Alert silenced
+
+  /api/alerts/stats:
+    get:
+      tags: [Alerts]
+      summary: Alert statistics
+      description: Get alert counts by state and severity
+      responses:
+        '200':
+          description: Alert stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertStats'
+
+  /api/alerts/history:
+    get:
+      tags: [Alerts]
+      summary: Alert history
+      description: Get recent alert state transitions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Alert history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertHistory'
+
+  # ─── WebSocket ────────────────────────────────────────────
+  /ws:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket connection
+      description: |
+        Upgrade to WebSocket for real-time updates.
+        Subscribe to topics: health, alert, metrics, session.
+      responses:
+        '101':
+          description: WebSocket upgrade
+
+  /ws/status:
+    get:
+      tags: [WebSocket]
+      summary: WebSocket status
+      description: Get number of connected WebSocket clients
+      responses:
+        '200':
+          description: WebSocket status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WSStatus'
