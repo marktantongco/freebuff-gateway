@@ -2,16 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/marktantongco/freebuff-gateway/internal/accounts"
+	"github.com/marktantongco/freebuff-gateway/internal/alerting"
 	"github.com/marktantongco/freebuff-gateway/internal/api"
 	"github.com/marktantongco/freebuff-gateway/internal/authkeys"
 	"github.com/marktantongco/freebuff-gateway/internal/channelconfig"
@@ -20,6 +23,7 @@ import (
 	"github.com/marktantongco/freebuff-gateway/internal/freebuffstate"
 	"github.com/marktantongco/freebuff-gateway/internal/logs"
 	"github.com/marktantongco/freebuff-gateway/internal/metrics"
+	"github.com/marktantongco/freebuff-gateway/internal/observability"
 	"github.com/marktantongco/freebuff-gateway/internal/orchestration"
 	"github.com/marktantongco/freebuff-gateway/internal/proxypool"
 	"github.com/marktantongco/freebuff-gateway/internal/runtimeconfig"
@@ -119,7 +123,106 @@ func main() {
 	adminAuth := api.NewAdminAuthenticator(cfg.AdminPassword, cfg.AdminSessionTTL)
 	apiKeyAuth := api.NewAPIKeyAuthenticator(authKeyRepo)
 
+	// ─── Alerting System ────────────────────────────────────────
+	healthChecker := observability.NewHealthChecker("1.0.0")
+
+	alertCfg := alerting.DefaultAlertConfig()
+	alertCfg.CheckInterval = 30 * time.Second
+	alertCfg.CooldownPeriod = 5 * time.Minute
+	alertCfg.MaxRetries = 3
+	alertCfg.StaleAfter = 1 * time.Hour
+	alertManager := alerting.NewManager(alertCfg, nil) // nil = nopLogger
+
+	// Register notification channels from env
+	if webhookURL := os.Getenv("ALERT_WEBHOOK_URL"); webhookURL != "" {
+		alertManager.AddNotifier(alerting.NewWebhookNotifier("webhook", webhookURL, nil))
+		log.Printf("alerting: webhook channel enabled → %s", webhookURL)
+	}
+	if slackURL := os.Getenv("ALERT_SLACK_URL"); slackURL != "" {
+		alertManager.AddNotifier(alerting.NewSlackNotifier("slack", slackURL, ""))
+		log.Printf("alerting: slack channel enabled")
+	}
+	if token := os.Getenv("ALERT_TELEGRAM_TOKEN"); token != "" {
+		chatID := os.Getenv("ALERT_TELEGRAM_CHAT_ID")
+		alertManager.AddNotifier(alerting.NewTelegramNotifier("telegram", token, chatID))
+		log.Printf("alerting: telegram channel enabled → chat %s", chatID)
+	}
+	if discordURL := os.Getenv("ALERT_DISCORD_URL"); discordURL != "" {
+		alertManager.AddNotifier(alerting.NewDiscordNotifier("discord", discordURL))
+		log.Printf("alerting: discord channel enabled")
+	}
+	if smtpAddr := os.Getenv("ALERT_EMAIL_SMTP"); smtpAddr != "" {
+		emailTo := strings.Split(os.Getenv("ALERT_EMAIL_TO"), ",")
+		emailCC := strings.Split(os.Getenv("ALERT_EMAIL_CC"), ",")
+		emailBCC := strings.Split(os.Getenv("ALERT_EMAIL_BCC"), ",")
+		emailFrom := os.Getenv("ALERT_EMAIL_FROM")
+		if emailFrom == "" {
+			emailFrom = "alerts@freebuff-gateway"
+		}
+		notify := alerting.NewEmailNotifier(alerting.EmailConfig{
+			Name:     "email",
+			SMTPAddr: smtpAddr,
+			Username: os.Getenv("ALERT_EMAIL_USERNAME"),
+			Password: os.Getenv("ALERT_EMAIL_PASSWORD"),
+			From:     emailFrom,
+			To:       emailTo,
+			CC:       emailCC,
+			BCC:      emailBCC,
+			HTML:     os.Getenv("ALERT_EMAIL_HTML") == "true",
+		})
+		alertManager.AddNotifier(notify)
+		log.Printf("alerting: email channel enabled → %s (to: %s)", smtpAddr, strings.Join(emailTo, ","))
+	}
+
+	// Create bridge between health checker and alerting
+	alertBridge := alerting.NewBridge(healthChecker, alertManager, 30*time.Second)
+
+	// Register health checks
+	healthChecker.RegisterCheck("gateway", func(ctx context.Context) observability.ComponentHealth {
+		return observability.ComponentHealth{
+			Name:    "gateway",
+			Status:  "healthy",
+			Message: "Gateway is running",
+		}
+	})
+	healthChecker.RegisterCheck("database", func(ctx context.Context) observability.ComponentHealth {
+		if err := db.PingContext(ctx); err != nil {
+			return observability.ComponentHealth{
+				Name:    "database",
+				Status:  "unhealthy",
+				Message: err.Error(),
+			}
+		}
+		return observability.ComponentHealth{
+			Name:    "database",
+				Status:  "healthy",
+				Message: "SQLite connected",
+			}
+	})
+
+	// Create alert handler for API routes
+	alertHandler := alerting.NewHandler(alertManager)
+
 	mux := api.BuildRouter(adminHandler, proxyHandler, web.FS, adminAuth, apiKeyAuth)
+
+	// Register alerting API routes (protected by admin auth)
+	alertHandler.RegisterRoutes(mux)
+
+	// Register observability endpoints
+	mux.Handle("GET /metrics", observability.NewPrometheusExporter().Handler())
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		resp := healthChecker.CheckHealth(r.Context())
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(resp)
+	})
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /livez", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
 	server := &http.Server{
 		Addr:    cfg.ListenAddr,
 		Handler: withRequestLogger(mux),
@@ -135,6 +238,8 @@ func main() {
 	}
 	go sm.Run(ctx)
 	go logRepo.Run(ctx)
+	go alertManager.Start(ctx)
+	go alertBridge.Start(ctx)
 	if cfg.ProxyHealthcheckEnabled {
 		checker := proxypool.NewChecker(proxyPoolRepo, proxypool.NewProbeTransport(), proxyCheckConfig)
 		go checker.Run(ctx)

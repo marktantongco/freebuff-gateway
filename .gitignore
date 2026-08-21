@@ -4,4 +4,4 @@ bin/
 *.db-wal
 logs/
 data/
-gateway
+/gateway
