@@ -1,56 +1,58 @@
-# Binaries
+# ─── Binaries ────────────────────────────────────────────────
 bin/
 *.exe
-*.exe~
 *.dll
 *.so
 *.dylib
+freebuff-gateway
+freebuff-doctor
 
-# Test binary
+# ─── Build artifacts ────────────────────────────────────────
 *.test
-
-# Coverage
 *.out
 coverage.html
-
-# Build artifacts
 *.db
 *.db-shm
 *.db-wal
 
-# IDE
+# ─── IDE ────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
+# ─── OS ─────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Git
+# ─── Git ────────────────────────────────────────────────────
 .git/
 .gitignore
 
-# Documentation
+# ─── Documentation ──────────────────────────────────────────
 *.md
 LICENSE
 
-# CI/CD
+# ─── CI/CD ──────────────────────────────────────────────────
 .github/
 
-# Logs
+# ─── Logs & Data ───────────────────────────────────────────
 logs/
 *.log
-
-# Data
 data/
 
-# Go
-vendor/
-
-# Docker
+# ─── Docker (prevent recursive) ────────────────────────────
 Dockerfile
 docker-compose*.yml
 .dockerignore
+
+# ─── Local dev ─────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+freebuff-gateway.service
+start.sh
+
+# ─── Deploy configs (not needed in image) ──────────────────
+deploy/

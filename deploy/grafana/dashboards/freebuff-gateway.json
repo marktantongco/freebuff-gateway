@@ -1,0 +1,63 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "title": "Freebuff Gateway",
+  "uid": "freebuff-gateway",
+  "panels": [
+    {
+      "title": "Gateway Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "up{job=\"freebuff-gateway\"}", "legendFormat": "Up" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } }, "type": "value" }]
+        }
+      }
+    },
+    {
+      "title": "Requests/sec",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [{ "expr": "rate(http_requests_total{job=\"freebuff-gateway\"}[5m])", "legendFormat": "{{method}} {{path}}" }]
+    },
+    {
+      "title": "Request Latency (P95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [{ "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"freebuff-gateway\"}[5m]))", "legendFormat": "P95" }]
+    },
+    {
+      "title": "Active Connections",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "websocket_connected_clients{job=\"freebuff-gateway\"}", "legendFormat": "Clients" }]
+    },
+    {
+      "title": "Goroutines",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "go_goroutines{job=\"freebuff-gateway\"}", "legendFormat": "Goroutines" }]
+    },
+    {
+      "title": "Memory (MB)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "go_memstats_alloc_bytes{job=\"freebuff-gateway\"} / 1024 / 1024", "legendFormat": "Alloc MB" }]
+    },
+    {
+      "title": "Error Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "targets": [{ "expr": "rate(http_requests_total{job=\"freebuff-gateway\",code=~\"5..\"}[5m])", "legendFormat": "5xx" }]
+    },
+    {
+      "title": "Rate Limited Requests",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "targets": [{ "expr": "rate(http_requests_total{job=\"freebuff-gateway\",code=\"429\"}[5m])", "legendFormat": "429 Rate Limited" }]
+    }
+  ],
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "10s"
+}

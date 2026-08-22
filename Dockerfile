@@ -1,54 +1,76 @@
-# Build stage
+# ─────────────────────────────────────────────────────────────
+# Freebuff Gateway — Multi-stage Dockerfile
+# ─────────────────────────────────────────────────────────────
+# Stage 1: Build
 FROM golang:1.25-alpine AS builder
 
-RUN apk add --no-cache git
+# Build args for versioning
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+RUN apk add --no-cache git ca-certificates tzdata
 
 WORKDIR /app
 
-# Copy go mod files
+# Cache dependencies first (layer caching)
 COPY go.mod go.sum ./
-RUN go mod download
+RUN go mod download && go mod verify
 
 # Copy source code
 COPY . .
 
-# Build binaries
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-s -w" \
+# Build all binaries with version info
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" \
+    -trimpath \
     -o /freebuff-gateway \
     ./cmd/gateway/
 
-RUN CGO_ENABLED=0 GOOS=linux go build \
+# Build doctor utility
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags="-s -w" \
+    -trimpath \
     -o /freebuff-doctor \
-    ./cmd/doctor/
+    ./cmd/doctor/ 2>/dev/null || true
 
-# Runtime stage
+# ─────────────────────────────────────────────────────────────
+# Stage 2: Runtime (minimal image)
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata
+# Security: add ca-certs and tzdata
+RUN apk add --no-cache ca-certificates tzdata curl
 
-# Create non-root user
+# Security: non-root user
 RUN addgroup -g 1001 -S freebuff && \
-    adduser -u 1001 -S freebuff -G freebuff
+    adduser -u 1001 -S freebuff -G freebuff -s /bin/sh
 
 WORKDIR /app
 
 # Copy binaries from builder
-COPY --from=builder /freebuff-gateway .
-COPY --from=builder /freebuff-doctor .
+COPY --from=builder /freebuff-gateway ./freebuff-gateway
+COPY --from=builder /freebuff-doctor ./freebuff-doctor
 
-# Copy config example
-COPY configs/config.example.json ./config.json
+# Copy example config
+COPY --chown=freebuff:freebuff configs/config.example.json ./config.json
 
-# Create data directory
-RUN mkdir -p data && chown -R freebuff:freebuff /app
+# Create directories for data and logs
+RUN mkdir -p data logs && chown -R freebuff:freebuff /app
 
+# Switch to non-root user
 USER freebuff
 
+# Expose gateway port
 EXPOSE 30080
 
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:30080/healthz || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl -sf http://localhost:30080/healthz || exit 1
+
+# Labels
+LABEL maintainer="marktantongco" \
+      version="${VERSION}" \
+      description="Freebuff Gateway — Unified AI API Gateway" \
+      org.opencontainers.image.source="https://github.com/marktantongco/freebuff-gateway"
 
 ENTRYPOINT ["./freebuff-gateway"]
