@@ -18,10 +18,12 @@ const (
 	MsgTypeAlert      MessageType = "alert"
 	MsgTypeMetrics    MessageType = "metrics"
 	MsgTypeSession    MessageType = "session"
-	MsgTypeConfig     MessageType = "config"
-	MsgTypePing       MessageType = "ping"
-	MsgTypePong       MessageType = "pong"
-	MsgTypeSubscribe  MessageType = "subscribe"
+	MsgTypeConfig      MessageType = "config"
+	MsgTypeRateLimits  MessageType = "ratelimits"
+	MsgTypeAnalytics   MessageType = "analytics"
+	MsgTypePing        MessageType = "ping"
+	MsgTypePong        MessageType = "pong"
+	MsgTypeSubscribe   MessageType = "subscribe"
 	MsgTypeUnsubscribe MessageType = "unsubscribe"
 )
 

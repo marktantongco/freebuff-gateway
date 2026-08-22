@@ -315,6 +315,24 @@ func main() {
 		go checker.Run(ctx)
 	}
 
+	// ─── WebSocket Analytics Streamer ───────────────────────
+	go func() {
+		ticker := time.NewTicker(5 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if wsHub.ClientCount() == 0 {
+					continue
+				}
+				wsHub.BroadcastToTopic(websocket.MsgTypeAnalytics, usageAnalytics.Snapshot())
+				wsHub.BroadcastToTopic(websocket.MsgTypeRateLimits, rateLimitTracker.Snapshot())
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
 	go func() {
 		log.Printf("gateway: listening on %s", cfg.ListenAddr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {

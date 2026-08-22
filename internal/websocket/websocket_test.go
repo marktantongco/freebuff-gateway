@@ -286,3 +286,99 @@ func TestIntToString(t *testing.T) {
 		}
 	}
 }
+
+func TestMsgTypesExist(t *testing.T) {
+	// Verify all topic types are defined
+	types := map[MessageType]bool{
+		MsgTypeHealth:     true,
+		MsgTypeAlert:      true,
+		MsgTypeMetrics:    true,
+		MsgTypeSession:    true,
+		MsgTypeConfig:     true,
+		MsgTypeRateLimits: true,
+		MsgTypeAnalytics:  true,
+	}
+	for mt := range types {
+		if mt == "" {
+			t.Fatal("empty message type found")
+		}
+	}
+}
+
+func TestBroadcastToAnalyticsTopic(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := ws.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), topics: map[MessageType]bool{MsgTypeAnalytics: true}}
+		hub.RegisterClient(client)
+		go client.WritePump()
+
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var m Message
+		json.Unmarshal(msg, &m)
+		if m.Type != MsgTypeAnalytics {
+			t.Errorf("expected analytics type, got %s", m.Type)
+		}
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + srv.URL[4:]
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	hub.BroadcastToTopic(MsgTypeAnalytics, map[string]string{"total": "100"})
+	time.Sleep(50 * time.Millisecond)
+}
+
+func TestBroadcastToRateLimitsTopic(t *testing.T) {
+	hub := NewHub()
+	go hub.Run()
+	defer hub.Stop()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upgrader := ws.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+		client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), topics: map[MessageType]bool{MsgTypeRateLimits: true}}
+		hub.RegisterClient(client)
+		go client.WritePump()
+
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+		var m Message
+		json.Unmarshal(msg, &m)
+		if m.Type != MsgTypeRateLimits {
+			t.Errorf("expected ratelimits type, got %s", m.Type)
+		}
+	}))
+	defer srv.Close()
+
+	wsURL := "ws" + srv.URL[4:]
+	conn, _, err := ws.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	hub.BroadcastToTopic(MsgTypeRateLimits, map[string]int{"total": 50})
+	time.Sleep(50 * time.Millisecond)
+}
