@@ -335,6 +335,24 @@ func main() {
 	}
 	go sm.Run(ctx)
 	go logRepo.Run(ctx)
+
+	// Wire alert state changes to WebSocket broadcasts
+	alertManager.SetOnAlert(func(alert *alerting.Alert) {
+		wsHub.BroadcastToTopic(websocket.MsgTypeAlert, map[string]any{
+			"name":      alert.Name,
+			"severity":  alert.Severity,
+			"state":     alert.State,
+			"source":    alert.Source,
+			"message":   alert.Message,
+			"fingerprint": alert.Fingerprint(),
+			"fired_at":    alert.FiredAt.Unix(),
+			"resolved_at": func() any {
+				if alert.ResolvedAt != nil { return alert.ResolvedAt.Unix() }
+				return nil
+			}(),
+		})
+	})
+
 	go alertManager.Start(ctx)
 	go alertBridge.Start(ctx)
 	go logRotator.Start(ctx)

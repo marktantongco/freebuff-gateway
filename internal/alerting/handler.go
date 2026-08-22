@@ -84,7 +84,13 @@ func (h *Handler) createManualAlert(w http.ResponseWriter, r *http.Request) {
 
 	h.manager.mu.Lock()
 	h.manager.alerts[alert.Fingerprint()] = alert
+	onAlert := h.manager.onAlert
 	h.manager.mu.Unlock()
+
+	// Fire callback for WebSocket notifications
+	if onAlert != nil {
+		onAlert(alert)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

@@ -100,6 +100,15 @@
     .toast.error { border-color: var(--red); }
     @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
     
+    /* Alert Notification */
+    .alert-notif { position: fixed; top: 20px; right: 20px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid; border-radius: var(--radius); padding: 14px 18px; font-size: 13px; z-index: 300; min-width: 300px; max-width: 400px; cursor: pointer; animation: notifSlide 0.4s ease; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .alert-notif-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-weight: 600; font-size: 12px; }
+    .alert-notif-severity { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; }
+    .alert-notif-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .alert-notif-msg { color: var(--text2); font-size: 12px; line-height: 1.4; margin-bottom: 4px; }
+    .alert-notif-time { color: var(--text2); font-size: 11px; }
+    @keyframes notifSlide { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    
     /* Responsive */
     @media (max-width: 768px) {
       .sidebar { width: 60px; }
@@ -183,6 +192,10 @@
       <a class="nav-item" data-page="analytics" onclick="showPage('analytics')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
         <span>Analytics</span>
+      </a>
+      <a class="nav-item" data-page="websocket" onclick="showPage('websocket')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <span>WebSocket</span>
       </a>
     </div>
     <div class="sidebar-footer">
@@ -793,6 +806,46 @@
       setTimeout(() => toast.remove(), 3000);
     }
 
+    function showAlertNotification(data) {
+      if (!data) return;
+      const severity = data.severity || 'info';
+      const state = data.state || 'firing';
+      const name = data.name || 'Unknown Alert';
+      const message = data.message || '';
+      const colors = { critical: '#ef4444', warning: '#f59e0b', info: '#3b82f6' };
+      const color = colors[severity] || '#64748b';
+      const icon = state === 'resolved' ? '✅' : severity === 'critical' ? '🔴' : severity === 'warning' ? '🟡' : '🔵';
+
+      const notif = document.createElement('div');
+      notif.className = 'alert-notif';
+      notif.style.borderLeftColor = color;
+      notif.innerHTML = `
+        <div class="alert-notif-header">
+          <span>${icon} ${state === 'resolved' ? 'Resolved' : 'Firing'}</span>
+          <span class="alert-notif-severity" style="color:${color}">${severity.toUpperCase()}</span>
+        </div>
+        <div class="alert-notif-title">${name}</div>
+        ${message ? `<div class="alert-notif-msg">${message}</div>` : ''}
+        <div class="alert-notif-time">${new Date().toLocaleTimeString()}</div>
+      `;
+      notif.addEventListener('click', () => { notif.remove(); showPage('alerts'); loadAlerts(); });
+      document.body.appendChild(notif);
+      setTimeout(() => notif.remove(), 8000);
+
+      // Play sound for critical alerts
+      if (severity === 'critical' && state !== 'resolved') {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 800; osc.type = 'square';
+          gain.gain.value = 0.1;
+          osc.start(); osc.stop(ctx.currentTime + 0.3);
+        } catch(e) {}
+      }
+    }
+
     // ─── Refresh ─────────────────────────────────────────────
     function refreshAll() {
       loadPageData(currentPage);
@@ -851,7 +904,7 @@
           break;
         case 'alert':
           if (currentPage === 'alerts') loadAlerts();
-          showToast('New alert received', 'warning');
+          showAlertNotification(msg.data);
           break;
         case 'metrics':
           if (currentPage === 'metrics') loadMetrics();
