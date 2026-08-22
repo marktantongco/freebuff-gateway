@@ -24,6 +24,7 @@ import (
 	_ "github.com/marktantongco/freebuff-gateway/internal/channels/freebuff"
 	"github.com/marktantongco/freebuff-gateway/internal/freebuffstate"
 	"github.com/marktantongco/freebuff-gateway/internal/logs"
+	"github.com/marktantongco/freebuff-gateway/internal/logrotation"
 	"github.com/marktantongco/freebuff-gateway/internal/metrics"
 	"github.com/marktantongco/freebuff-gateway/internal/observability"
 	"github.com/marktantongco/freebuff-gateway/internal/orchestration"
@@ -240,6 +241,32 @@ func main() {
 	mux.Handle("GET /api/admin/analytics", requireAdminAuth(usageAnalytics.Handler()))
 	mux.Handle("GET /api/admin/analytics/live", requireAdminAuth(usageAnalytics.Handler()))
 
+	// ─── Log Rotation ──────────────────────────────────────────
+	logRotationCfg := logrotation.DefaultConfig()
+	if v := os.Getenv("LOG_RETENTION_REQUEST_DAYS"); v != "" {
+		if d, err := strconv.Atoi(v); err == nil && d > 0 {
+			logRotationCfg.RequestLogRetention = time.Duration(d) * 24 * time.Hour
+		}
+	}
+	if v := os.Getenv("LOG_RETENTION_SYSTEM_DAYS"); v != "" {
+		if d, err := strconv.Atoi(v); err == nil && d > 0 {
+			logRotationCfg.SystemLogRetention = time.Duration(d) * 24 * time.Hour
+		}
+	}
+	if v := os.Getenv("LOG_RETENTION_ALERT_DAYS"); v != "" {
+		if d, err := strconv.Atoi(v); err == nil && d > 0 {
+			logRotationCfg.AlertRetention = time.Duration(d) * 24 * time.Hour
+		}
+	}
+	if v := os.Getenv("LOG_CLEANUP_INTERVAL_HOURS"); v != "" {
+		if h, err := strconv.Atoi(v); err == nil && h > 0 {
+			logRotationCfg.CleanupInterval = time.Duration(h) * time.Hour
+		}
+	}
+	logRotator := logrotation.NewRotator(db, logRotationCfg)
+	mux.Handle("GET /api/admin/log-rotation", requireAdminAuth(logRotator.Handler()))
+	mux.Handle("POST /api/admin/log-rotation/cleanup", requireAdminAuth(logRotator.Handler()))
+
 	// ─── WebSocket ──────────────────────────────────────────────
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
@@ -310,6 +337,8 @@ func main() {
 	go logRepo.Run(ctx)
 	go alertManager.Start(ctx)
 	go alertBridge.Start(ctx)
+	go logRotator.Start(ctx)
+
 	if cfg.ProxyHealthcheckEnabled {
 		checker := proxypool.NewChecker(proxyPoolRepo, proxypool.NewProbeTransport(), proxyCheckConfig)
 		go checker.Run(ctx)
